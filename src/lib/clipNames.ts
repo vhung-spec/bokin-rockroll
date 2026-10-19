@@ -20,13 +20,14 @@ export function shotNumberFromName(name: string, shotNos: number[]): number | nu
 export const naturalCompare = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
 /**
- * Gán danh sách file vào các cảnh:
+ * Gán danh sách file vào các cảnh (người dùng không phải chọn từng clip):
  * 1. File có số cảnh trong tên → vào đúng cảnh đó (thay clip cũ nếu có).
  * 2. File còn lại, xếp theo tên → lần lượt vào các cảnh chưa có clip.
- * Trả về số cảnh cho từng file (null = thừa, không còn cảnh trống).
+ * 3. Hết cảnh trống thì thành "clip thêm" (số sau cảnh cuối) — khi ghép nguyên clip, clip thêm phát nối tiếp sau các cảnh.
  */
-export function assignClipFiles(names: string[], shotNos: number[], taken: Iterable<number>): (number | null)[] {
+export function assignClipFiles(names: string[], shotNos: number[], taken: Iterable<number>): number[] {
   const result: (number | null)[] = names.map(() => null);
+  const takenList = [...taken];
   const used = new Set<number>();
   names.forEach((name, i) => {
     const n = shotNumberFromName(name, shotNos);
@@ -35,10 +36,11 @@ export function assignClipFiles(names: string[], shotNos: number[], taken: Itera
       used.add(n);
     }
   });
-  const busy = new Set([...taken, ...used]);
+  const busy = new Set([...takenList, ...used]);
   const free = [...shotNos].sort((a, b) => a - b).filter((n) => !busy.has(n));
+  let extra = Math.max(0, ...shotNos, ...busy) + 1;
   const rest = names.map((name, i) => ({ name, i })).filter(({ i }) => result[i] === null);
   rest.sort((a, b) => naturalCompare(a.name, b.name));
-  for (const { i } of rest) result[i] = free.shift() ?? null;
-  return result;
+  for (const { i } of rest) result[i] = free.shift() ?? extra++;
+  return result as number[];
 }

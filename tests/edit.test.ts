@@ -67,7 +67,9 @@ describe("gán clip theo tên file", () => {
     const names = ["veo_b.mp4", "shot-02.mp4", "veo_a.mp4", "shot-02 (copy).mp4"];
     // cảnh 1 đã có clip
     expect(assignClipFiles(names, [1, 2, 3, 4, 5], [1])).toEqual([5, 2, 4, 3]);
-    expect(assignClipFiles(["a.mp4", "b.mp4", "c.mp4"], [1, 2], [])).toEqual([1, 2, null]);
+    // Nhiều clip hơn số cảnh: clip thừa thành clip thêm (#3, #4…).
+    expect(assignClipFiles(["a.mp4", "b.mp4", "c.mp4", "d.mp4"], [1, 2], [])).toEqual([1, 2, 3, 4]);
+    expect(assignClipFiles(["x.mp4"], [1, 2], [1, 2, 7])).toEqual([8]);
   });
 });
 
@@ -257,5 +259,22 @@ describe("buildEdit — ghép nguyên clip, lặp tới hết bài (mặc địn
     const plan = buildEdit(fullInput(() => 8, 400, { flipRepeats: true }));
     expect(plan.segments.filter((s) => s.use === 0).every((s) => !s.flip)).toBe(true);
     expect(plan.segments.filter((s) => s.use === 1).every((s) => s.flip)).toBe(true);
+  });
+});
+
+describe("clip thêm (nhiều clip hơn số cảnh)", () => {
+  it("ghép nguyên clip: clip thêm phát nối tiếp sau cảnh cuối; cắt theo nhịp thì không dùng", () => {
+    const input = makeInput({ audioDuration: 400, options: { mode: "full" } });
+    const shots = input.shots.map((s) => s.shot_no);
+    const last = Math.max(...shots);
+    input.clips[String(last + 1)] = { duration: 8 };
+    input.clips[String(last + 2)] = { duration: 8 };
+    const plan = buildEdit(input);
+    const order = plan.segments.map((s) => s.shot_no);
+    expect(order.slice(0, shots.length + 2)).toEqual([...shots, last + 1, last + 2]);
+    expect(plan.round_seconds).toBe((shots.length + 2) * 8);
+    const beat = buildEdit({ ...input, options: { ...input.options, mode: "beat" } });
+    expect(beat.segments.some((s) => s.shot_no > last)).toBe(false);
+    expect(beat.warnings.join(" ")).toMatch(/2 clip thêm/);
   });
 });

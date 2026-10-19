@@ -6,7 +6,7 @@ import { mediaUrl } from "@/lib/client";
 import { FONT_EXTENSIONS, LOGO_EXTENSIONS, LOGO_POSITIONS } from "@/lib/branding";
 import { LOUDNESS_PRESETS } from "@/lib/loudness";
 import { QUALITY_LABEL } from "@/lib/quality";
-import type { EditOptions, MediaFile, QualityPreset } from "@/lib/types";
+import type { EditOptions, MediaFile, Mp4Tags, QualityPreset } from "@/lib/types";
 
 /** Âm lượng, chất lượng, logo, intro tiêu đề và thông tin video — cách xuất của Bokin Studio Music. */
 export default function ExportStyleCard({
@@ -22,6 +22,7 @@ export default function ExportStyleCard({
   onUpload,
   onRemove,
   onPreview,
+  autoTags = null,
 }: {
   /** Thư mục chứa logo / font (thiết lập chung: "_shared"). */
   assetOwner: string;
@@ -38,6 +39,8 @@ export default function ExportStyleCard({
   onRemove: (kind: "logo" | "font") => void;
   /** Lưu tuỳ chọn rồi trả về URL ảnh xem thử ở giây t. */
   onPreview: (t: number) => Promise<string>;
+  /** Thông tin MP4 sẽ ghi cho MV đang mở (trang của một MV). */
+  autoTags?: Mp4Tags | null;
 }) {
   const logoInput = useRef<HTMLInputElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
@@ -232,23 +235,33 @@ export default function ExportStyleCard({
 
         <section className="space-y-2 rounded-lg border border-ink/15 p-3">
           <h3 className="label">Thông tin video (ghi vào file MP4)</h3>
+          <p className="text-xs text-muted">
+            <b className="text-ink">Tự động cho từng MV</b> từ gợi ý lúc dựng kịch bản: tiêu đề = gợi ý tiêu đề YouTube số 1, mô tả = mô tả YouTube, từ khoá = các
+            hashtag trong mô tả, năm = năm dựng. File tải về cũng mang tên tiêu đề đó (YouTube lấy tên file làm tiêu đề khi upload).
+          </p>
+          {autoTags && (
+            <div className="rounded-md border border-ink/15 bg-cream/60 p-2 text-xs" data-testid="auto-tags">
+              <div>
+                <b>Tiêu đề:</b> {autoTags.title}
+              </div>
+              <div className="line-clamp-3 whitespace-pre-line">
+                <b>Mô tả:</b> {autoTags.description || "(chưa có)"}
+              </div>
+              {autoTags.keywords.length > 0 && (
+                <div>
+                  <b>Từ khoá:</b> {autoTags.keywords.join(", ")}
+                </div>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Tiêu đề">
-              <input className="input py-1" value={options.metadata.title} placeholder={songTitle} onChange={(e) => setMeta({ title: e.target.value })} />
-            </Field>
-            <Field label="Tác giả / kênh">
-              <input className="input py-1" value={options.metadata.artist} onChange={(e) => setMeta({ artist: e.target.value })} />
+            <Field label="Tên kênh / tác giả">
+              <input className="input py-1" value={options.metadata.artist} placeholder="vd. Bokin Rock & Roll" onChange={(e) => setMeta({ artist: e.target.value })} />
             </Field>
             <Field label="Thể loại">
               <input className="input py-1" value={options.metadata.genre} onChange={(e) => setMeta({ genre: e.target.value })} />
             </Field>
-            <Field label="Năm">
-              <input className="input py-1" maxLength={10} value={options.metadata.year} onChange={(e) => setMeta({ year: e.target.value })} />
-            </Field>
           </div>
-          <Field label="Ghi chú">
-            <textarea className="input min-h-14 py-1" value={options.metadata.comment} onChange={(e) => setMeta({ comment: e.target.value })} />
-          </Field>
         </section>
       </div>
 

@@ -111,7 +111,8 @@ EXTRA ASSETS
   iconic moment of the story, period-accurate, no text. Use the {{ID}} placeholders for characters;
   the style preset is appended automatically.
 - youtube_titles: exactly 3 English options in the channel's style, no all-caps clickbait.
-- youtube_description: 80–150 English words in the channel voice provided.
+- youtube_description: 80–150 English words in the channel voice provided, then a blank line and one line of
+  4–8 relevant hashtags (e.g. #rockandroll #1950s #doowop) — they are also written into the video file as keywords.
 - editing_notes: Vietnamese notes per section — where to cut fast on the beat, where to use slow
   motion, which transitions to use.`;
 

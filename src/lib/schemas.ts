@@ -72,11 +72,8 @@ export const zEditOptions = z.object({
     blur_percent: z.number().min(5).max(100),
   }),
   metadata: z.object({
-    title: z.string().max(200),
     artist: z.string().max(200),
     genre: z.string().max(100),
-    year: z.string().max(10),
-    comment: z.string().max(4000),
   }),
 });
 

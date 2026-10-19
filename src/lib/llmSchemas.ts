@@ -50,7 +50,7 @@ export const GENERATION_SCHEMA = obj({
   shots: { type: "array", items: SHOT_SCHEMA },
   thumbnail_prompt: str("English 16:9 still-image prompt; may use {{ID}} placeholders; no style preset"),
   youtube_titles: strArray("Exactly 3 YouTube title options"),
-  youtube_description: str("Short YouTube description in the channel voice"),
+  youtube_description: str("Short YouTube description in the channel voice, ending with a line of hashtags"),
   editing_notes: { type: "array", items: obj({ section: str("Section name"), note_vi: str("Editing note in Vietnamese") }) },
 });
 

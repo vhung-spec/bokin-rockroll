@@ -10,7 +10,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { cleanText, focusPull, introAss, introSpan, introText, logoFilters, metadataArgs, overlapsIntroText, LOGO_FADE_IN, FADE_FROM_BLACK, type TextMode } from "./branding";
+import { cleanText, downloadName, focusPull, introAss, introSpan, introText, logoFilters, metadataArgs, mvTags, overlapsIntroText, LOGO_FADE_IN, FADE_FROM_BLACK, type TextMode } from "./branding";
 import { RENDER_SIZES, SHARED_ID, applyShared, buildEdit, editInputFrom } from "./edit";
 import { exportFileBase } from "./exporters";
 import { FfmpegError, ffmpegOrThrow, findFfmpeg, hasFilter, probe, type RunOptions } from "./ffmpeg";
@@ -407,11 +407,12 @@ async function runJob(job: JobState, mv: MVResult, project: VideoProject, plan: 
     await fs.writeFile(path.join(tmp, "list.txt"), order.map((f) => `file '${f}'`).join("\n") + "\n", "utf8");
     job.stage = "Ghép hình với tiếng";
     const partial = path.join(tmp, "out.mp4");
-    const meta = { ...opts.metadata, title: opts.metadata.title || look.title };
+    // Thông tin MP4 điền tự động từ gợi ý YouTube lúc dựng kịch bản (tên kênh, thể loại: thiết lập chung).
+    const tags = mvTags(mv, opts.metadata);
     await ffmpegOrThrow(
       ["-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", "list.txt", "-i", audio.file,
         "-map", "0:v:0", "-map", "1:a:0", "-map_metadata", "-1", "-map_chapters", "-1", "-c:v", "copy", "-c:a", "copy",
-        "-t", plan.duration.toFixed(6), ...metadataArgs(meta), "-movflags", "+faststart", partial],
+        "-t", plan.duration.toFixed(6), ...metadataArgs(tags), "-movflags", "+faststart", partial],
       "Ghép video với nhạc",
       { signal, cwd: tmp },
     );
@@ -439,6 +440,8 @@ async function runJob(job: JobState, mv: MVResult, project: VideoProject, plan: 
       loudness: audio.report,
       verification,
       branding: { logo: Boolean(look.logo), intro: opts.intro.enabled },
+      tags,
+      download_name: downloadName(tags.title),
     };
     await updateProject(mv.id, (p) => ({ ...p, renders: [output, ...p.renders] }));
     Object.assign(job, { status: "done", progress: 1, stage: "Xong", output, finished_at: new Date().toISOString() });

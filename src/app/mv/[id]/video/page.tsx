@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ClipGrid, { VIDEO_ACCEPT } from "@/components/video/ClipGrid";
+import ClipStrip from "@/components/video/ClipStrip";
 import EditOptionsCard from "@/components/video/EditOptionsCard";
 import ExportStyleCard from "@/components/video/ExportStyleCard";
 import Timeline from "@/components/video/Timeline";
 import { Card, ErrorBox, Spinner } from "@/components/ui";
-import { api, exportUrl, formatBytes, formatClock, mediaUrl, uploadFile } from "@/lib/client";
+import { api, exportUrl, filesFromDrop, formatBytes, formatClock, mediaUrl, uploadFile } from "@/lib/client";
+import { mvTags } from "@/lib/branding";
 import { assignClipFiles } from "@/lib/clipNames";
 import { RENDER_SIZES, SHARED_ID, autoSectionStarts, buildEdit, editInputFrom } from "@/lib/edit";
 import type { EditOptions, EditPlan, LoudnessReport, MVResult, RenderJob, Verification, VideoProject } from "@/lib/types";
@@ -40,6 +42,7 @@ export default function VideoPage() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const songInput = useRef<HTMLInputElement>(null);
   const bulkInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
   const savedOptions = useRef<string>("");
 
   const base = `/api/mv/${id}/media`;
@@ -119,7 +122,8 @@ export default function VideoPage() {
 
   const project = st.project;
   const audio = project.audio;
-  const clipCount = mv.shots.filter((s) => project.clips[String(s.shot_no)]).length;
+  const clipTotal = Object.keys(project.clips).length;
+  const missingShots = mv.shots.filter((s) => !project.clips[String(s.shot_no)]).length;
   const title = mv.idea.song_title || mv.idea.world_location;
   const busy = Boolean(upload) || running;
   const size = RENDER_SIZES[options.size];
@@ -147,8 +151,8 @@ export default function VideoPage() {
     });
   }
 
-  async function uploadClips(items: { shot: number; file: File }[]) {
-    await run(async () => {
+  async function uploadClips(items: { shot: number; file: File }[]): Promise<boolean> {
+    return (await run(async () => {
       try {
         for (const [k, { shot, file }] of items.entries()) {
           const label = `Clip ${k + 1}/${items.length} → cảnh #${shot}: ${file.name}`;
@@ -156,10 +160,11 @@ export default function VideoPage() {
           const s = await uploadFile<MediaState>(`${base}?kind=clip&shot=${shot}&name=${encodeURIComponent(file.name)}`, file, (p) => setUpload({ label, progress: p }));
           apply(s, false);
         }
+        return true;
       } finally {
         setUpload(null);
       }
-    });
+    })) ?? false;
   }
 
   function uploadMany(files: File[]) {
@@ -172,14 +177,12 @@ export default function VideoPage() {
       shotNos,
       taken,
     );
-    const items = videos.map((file, i) => ({ file, shot: target[i] })).filter((x): x is { file: File; shot: number } => x.shot !== null);
-    const extra = videos.length - items.length;
-    setNotice(
-      `Đã xếp ${items.length} clip: ${items.map((x) => `${x.file.name} → #${x.shot}`).join(", ")}.` +
-        (extra ? ` ${extra} file thừa (không còn cảnh trống) được bỏ qua.` : "") +
-        " Xếp sai thì dùng “Chuyển sang…” ở từng cảnh.",
-    );
-    void uploadClips(items);
+    const items = videos.map((file, i) => ({ file, shot: target[i] }));
+    const last = Math.max(...shotNos);
+    const extra = items.filter((x) => x.shot > last).length;
+    const detail = "app tự xếp thứ tự (số cảnh trong tên file, còn lại theo tên file)" + (extra ? `; ${extra} clip nhiều hơn số cảnh được phát nối tiếp sau cảnh ${last}.` : ".");
+    setNotice(`Đang thêm ${items.length} clip — ${detail}`);
+    void uploadClips(items).then((ok) => ok && setNotice(`✓ Đã thêm ${items.length} clip — ${detail}`));
   }
 
   const seek = (t: number) => {
@@ -355,14 +358,29 @@ export default function VideoPage() {
 
       {/* 2. Clip */}
       <Card
-        title={`2. Clip video (${clipCount}/${mv.shots.length} cảnh)`}
+        title={`2. Clip video (${clipTotal} clip${clipTotal && options.mode === "full" ? ` · một vòng ${formatClock(plan.round_seconds ?? 0, 0)}` : ""})`}
         actions={
           <>
             <a className="btn-ghost btn-sm" href={exportUrl("prompts-spaced", { ids: [mv.id] })}>
               File prompt (.txt)
             </a>
+            {clipTotal > 0 && (
+              <button
+                className="btn-ghost btn-sm"
+                disabled={busy}
+                onClick={() =>
+                  window.confirm(`Bỏ cả ${clipTotal} clip của MV này để tải bộ clip mới?`) &&
+                  run(async () => apply(await api<MediaState>(`${base}?kind=clips`, { method: "DELETE" }), false))
+                }
+              >
+                Xoá tất cả clip
+              </button>
+            )}
+            <button className="btn-ghost btn-sm" onClick={() => folderInput.current?.click()} disabled={busy}>
+              Chọn cả thư mục
+            </button>
             <button className="btn-primary btn-sm" onClick={() => bulkInput.current?.click()} disabled={busy}>
-              Tải nhiều clip một lúc
+              Chọn clip
             </button>
           </>
         }
@@ -379,17 +397,37 @@ export default function VideoPage() {
             if (files.length) uploadMany(files);
           }}
         />
+        <input
+          ref={folderInput}
+          type="file"
+          multiple
+          className="hidden"
+          {...{ webkitdirectory: "", directory: "" }}
+          onChange={(e) => {
+            const files = [...(e.target.files ?? [])];
+            e.target.value = "";
+            if (files.length) uploadMany(files);
+          }}
+        />
         <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
-            if (!busy) uploadMany([...e.dataTransfer.files]);
+            if (busy) return;
+            filesFromDrop(e.dataTransfer)
+              .then(uploadMany)
+              .catch((err) => setError((err as Error).message));
           }}
         >
-          <p className="mb-3 text-xs text-muted">
-            Mỗi cảnh một clip. Kéo thả cả thư mục clip vào đây: file có số cảnh trong tên (<code>shot-03.mp4</code>, <code>cảnh 3.mov</code>, <code>03.mp4</code>) tự vào đúng
-            cảnh; file không có số được xếp lần lượt (theo tên file) vào các cảnh còn trống. Tiếng của clip được tắt — MV chỉ dùng nhạc của bài hát.
-          </p>
+          <div
+            className={`mb-3 rounded-lg border-2 border-dashed border-ink/30 bg-cream/60 text-center text-sm text-muted ${clipTotal ? "px-3 py-2" : "p-6"}`}
+            data-testid="clip-drop"
+          >
+            {!clipTotal && <div className="text-3xl">🎞️</div>}
+            <b className="text-ink">Thả tất cả clip (hoặc cả thư mục) vào đây</b> — không cần chọn cho từng cảnh. App tự xếp: tên file có số cảnh (
+            <code>shot-03.mp4</code>, <code>cảnh 3.mov</code>, <code>03.mp4</code>) vào đúng chỗ, còn lại theo thứ tự tên file; nhiều clip hơn số cảnh cũng được.
+            Tiếng của clip được tắt — MV chỉ dùng nhạc của bài hát.
+          </div>
           {notice && (
             <p className="mb-3 rounded-md border border-mint-dark/40 bg-mint/15 px-2 py-1 text-xs">
               {notice}
@@ -398,18 +436,38 @@ export default function VideoPage() {
               </button>
             </p>
           )}
-          <ClipGrid
-            mvId={mv.id}
-            shots={mv.shots}
-            clips={project.clips}
-            plan={plan}
-            busy={busy}
-            highlight={hover}
-            onHover={setHover}
-            onUpload={(shot, file) => void uploadClips([{ shot, file }])}
-            onRemove={(shot) => run(async () => apply(await api<MediaState>(`${base}?kind=clip&shot=${shot}`, { method: "DELETE" }), false))}
-            onSwap={(a, b) => run(async () => apply(await api<MediaState>(base, { method: "PATCH", json: { action: "swap", a, b } }), false))}
-          />
+          {clipTotal > 0 && (
+            <ClipStrip
+              mvId={mv.id}
+              clips={project.clips}
+              shotCount={Math.max(...mv.shots.map((s) => s.shot_no))}
+              uses={plan.uses}
+              highlight={hover}
+              busy={busy}
+              onHover={setHover}
+              onRemove={(n) => run(async () => apply(await api<MediaState>(`${base}?kind=clip&shot=${n}`, { method: "DELETE" }), false))}
+            />
+          )}
+          <details className="mt-3">
+            <summary className="cursor-pointer text-xs font-semibold text-muted">
+              Sửa từng cảnh (không bắt buộc): thay / chuyển clip, copy prompt cho cảnh còn thiếu
+              {missingShots > 0 && ` — ${missingShots} cảnh chưa có clip`}
+            </summary>
+            <div className="mt-3">
+              <ClipGrid
+                mvId={mv.id}
+                shots={mv.shots}
+                clips={project.clips}
+                plan={plan}
+                busy={busy}
+                highlight={hover}
+                onHover={setHover}
+                onUpload={(shot, file) => void uploadClips([{ shot, file }])}
+                onRemove={(shot) => run(async () => apply(await api<MediaState>(`${base}?kind=clip&shot=${shot}`, { method: "DELETE" }), false))}
+                onSwap={(a, b) => run(async () => apply(await api<MediaState>(base, { method: "PATCH", json: { action: "swap", a, b } }), false))}
+              />
+            </div>
+          </details>
         </div>
       </Card>
 
@@ -477,6 +535,7 @@ export default function VideoPage() {
       {/* 4. Âm thanh, logo, intro (cách xuất của Bokin Studio Music) */}
       <ExportStyleCard
         assetOwner={SHARED_ID}
+        autoTags={mvTags(mv, options.metadata)}
         options={options}
         onChange={setOptions}
         logo={st.shared.logo}

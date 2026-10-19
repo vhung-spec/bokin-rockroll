@@ -99,3 +99,27 @@ export function parseClock(text: string): number | null {
   if (!m) return null;
   return (m[1] ? Number(m[1]) * 60 : 0) + Number(m[2].replace(",", "."));
 }
+
+/** Mọi file trong lần kéo thả, kể cả file nằm trong thư mục (và thư mục con) được thả vào. */
+export async function filesFromDrop(dt: DataTransfer): Promise<File[]> {
+  const entries = [...dt.items]
+    .map((it) => (it.kind === "file" ? it.webkitGetAsEntry?.() : null))
+    .filter((e): e is FileSystemEntry => Boolean(e));
+  if (!entries.length || entries.every((e) => e.isFile)) return [...dt.files];
+  const out: File[] = [];
+  const walk = async (entry: FileSystemEntry): Promise<void> => {
+    if (entry.isFile) {
+      out.push(await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej)));
+    } else if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader();
+      // readEntries trả về từng đợt (tối đa ~100 mục) cho tới khi hết.
+      for (;;) {
+        const batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
+        if (!batch.length) break;
+        for (const e of batch) await walk(e);
+      }
+    }
+  };
+  for (const e of entries) await walk(e);
+  return out;
+}

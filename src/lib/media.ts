@@ -242,6 +242,14 @@ export function removeClip(mvId: string, shotNo: number): Promise<VideoProject> 
   });
 }
 
+/** Xoá mọi clip của MV (để tải lại cả bộ clip mới). */
+export function removeAllClips(mvId: string): Promise<VideoProject> {
+  return updateProject(mvId, async (p) => {
+    for (const c of Object.values(p.clips)) await removeFile(mvId, c.file);
+    return { ...p, clips: {} };
+  });
+}
+
 export function removeAudio(mvId: string): Promise<VideoProject> {
   return updateProject(mvId, async (p) => {
     await removeFile(mvId, p.audio?.file);

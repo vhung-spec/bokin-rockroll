@@ -278,7 +278,7 @@ export function mockGenerate(ctx: GenContext): RawGeneration {
       `${song} | Vintage Doo-Wop Romance in ${place}`,
       `${place}, ${ctx.year}: ${song} (Retro 50s Music Video)`,
     ],
-    youtube_description: `Imagine turning the dial of an old tabletop radio and landing on a ${ctx.year} evening in ${place}. Neon hums, chrome gleams, and two strangers are about to change each other's summer. "${song}" is a love letter to 1950s America — ${ctx.theme.mood}. Close your eyes, let the doo-wop harmonies carry you back, and fall in love the old-fashioned way.`,
+    youtube_description: `Imagine turning the dial of an old tabletop radio and landing on a ${ctx.year} evening in ${place}. Neon hums, chrome gleams, and two strangers are about to change each other's summer. "${song}" is a love letter to 1950s America — ${ctx.theme.mood}. Close your eyes, let the doo-wop harmonies carry you back, and fall in love the old-fashioned way.\n\n#rockandroll #1950s #doowop #oldies #${place.replace(/[^A-Za-z0-9]+/g, "").toLowerCase()}`,
     editing_notes: mockEditingNotes(ctx.plan, ctx.settings.loopScenes),
   };
 }

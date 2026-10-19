@@ -153,7 +153,10 @@ describe("ghép video với nhạc", () => {
     const file = media.mediaPath(mv.id, out.file);
     const head = spawnSync(bin, ["-hide_banner", "-i", file]).stderr.toString();
     expect(head).toMatch(/Video: h264 \(High\).*bt709/);
-    expect(head).toMatch(/title\s*: Hollywood Boulevard Summer 1954/);
+    // Thông tin MP4 tự điền từ gợi ý YouTube lúc dựng kịch bản.
+    expect(head).toContain(`title           : ${mv.youtube_titles[0]}`);
+    expect(out.tags?.description).toBe(mv.youtube_description.trim());
+    expect(out.download_name).toMatch(/\.mp4$/);
     expect(head).toMatch(/artist\s*: Bokin Rock & Roll/);
     expect(head).toMatch(/Audio: aac.*48000 Hz, stereo/);
     make(["-ss", "2", "-i", file, "-frames:v", "1"], path.join(tmp, "intro-frame.png"));

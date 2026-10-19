@@ -181,9 +181,20 @@ export function buildEdit(input: EditInput): EditPlan {
   const beatLen = !full && options.snapBeats && input.beat && input.beat.bpm > 0 ? 60 / input.beat.bpm : null;
   const sections = resolveSections(input, duration);
 
-  const available = input.shots.filter((s) => (input.clips[String(s.shot_no)]?.duration ?? 0) > 0.2);
+  const hasClip = (n: number) => (input.clips[String(n)]?.duration ?? 0) > 0.2;
+  // Clip thêm (nhiều clip hơn số cảnh): chỉ dùng khi ghép nguyên clip, phát nối tiếp sau các cảnh.
+  const shotNos = new Set(input.shots.map((s) => s.shot_no));
+  const extras = Object.keys(input.clips)
+    .map(Number)
+    .filter((n) => !shotNos.has(n) && hasClip(n))
+    .sort((a, b) => a - b);
+  const available = [
+    ...input.shots.filter((s) => hasClip(s.shot_no)),
+    ...(full ? extras.map((n) => ({ shot_no: n, section: "" })) : []),
+  ];
   const clipDur = (n: number) => input.clips[String(n)].duration;
   const missing = input.shots.filter((s) => !input.clips[String(s.shot_no)]).map((s) => s.shot_no);
+  if (!full && extras.length) warnings.push(`${extras.length} clip thêm (ngoài số cảnh) chỉ dùng khi chọn “Ghép nguyên clip”.`);
 
   const plan: EditPlan = { fps, duration, total_frames: totalFrames, beat: beatLen, sections, segments: [], uses: {}, warnings };
   if (!available.length) {

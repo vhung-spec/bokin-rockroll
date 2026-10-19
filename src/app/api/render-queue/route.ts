@@ -11,7 +11,8 @@ async function candidates() {
   return Promise.all(
     mvs.map(async (mv) => {
       const p = await loadProject(mv.id).catch(() => null);
-      const clips = p ? mv.shots.filter((s) => p.clips[String(s.shot_no)]).length : 0;
+      // Mọi clip đã tải (kể cả clip thêm ngoài số cảnh).
+      const clips = p ? Object.keys(p.clips).length : 0;
       return {
         id: mv.id,
         idea_id: mv.idea.id,

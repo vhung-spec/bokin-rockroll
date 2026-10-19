@@ -1,7 +1,7 @@
 import { createReadStream, promises as fs } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { mediaPath } from "@/lib/media";
+import { loadProject, mediaPath } from "@/lib/media";
 
 const TYPES: Record<string, string> = {
   ".mp4": "video/mp4",
@@ -46,7 +46,13 @@ export async function GET(req: Request, { params }: Ctx) {
   }
 
   const headers: Record<string, string> = { "Content-Type": type, "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600" };
-  if (new URL(req.url).searchParams.get("download")) headers["Content-Disposition"] = `attachment; filename="${file}"`;
+  if (new URL(req.url).searchParams.get("download")) {
+    // Video đã dựng tải về với tên theo tiêu đề YouTube (YouTube lấy tên file làm tiêu đề mặc định khi upload).
+    const render = (await loadProject(id).catch(() => null))?.renders.find((r) => r.file === file);
+    headers["Content-Disposition"] = render?.download_name
+      ? `attachment; filename="${file}"; filename*=UTF-8''${encodeURIComponent(render.download_name)}`
+      : `attachment; filename="${file}"`;
+  }
 
   const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.get("range") ?? "");
   if (range && (range[1] || range[2])) {

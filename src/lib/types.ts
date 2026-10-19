@@ -434,13 +434,26 @@ export interface IntroConfig {
   blur_percent: number;
 }
 
-/** Thông tin video ghi vào file MP4 (Windows Explorer đọc được). */
+/**
+ * Thông tin video chọn một lần cho mọi MV (tên kênh, thể loại).
+ * Tiêu đề, mô tả, từ khoá và năm được điền tự động cho từng MV (xem Mp4Tags).
+ */
 export interface VideoMetadata {
+  artist: string;
+  genre: string;
+}
+
+/** Thông tin thật ghi vào file MP4 của một MV (Windows Explorer đọc được). */
+export interface Mp4Tags {
+  /** Gợi ý tiêu đề YouTube số 1 lúc dựng kịch bản (không có thì tên bài). */
   title: string;
+  /** Mô tả YouTube gợi ý lúc dựng kịch bản. */
+  description: string;
+  /** Hashtag trong mô tả. */
+  keywords: string[];
   artist: string;
   genre: string;
   year: string;
-  comment: string;
 }
 
 export interface LoudnessStats {
@@ -485,6 +498,10 @@ export interface RenderInfo {
   loudness?: LoudnessReport | null;
   verification?: Verification;
   branding?: { logo: boolean; intro: boolean };
+  /** Thông tin đã ghi vào file. */
+  tags?: Mp4Tags;
+  /** Tên file khi tải về (theo tiêu đề YouTube — YouTube lấy tên file làm tiêu đề mặc định khi upload). */
+  download_name?: string;
 }
 
 export interface VideoProject {

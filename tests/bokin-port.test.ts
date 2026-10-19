@@ -1,7 +1,7 @@
 // Các phần chuyển từ Bokin Studio Music: cân bằng âm lượng, preset YouTube, logo / intro, font.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_INTRO, DEFAULT_LOGO_LAYOUT, focusPull, fontSize, introAss, introSpan, logoFilters, metadataArgs } from "@/lib/branding";
+import { DEFAULT_INTRO, DEFAULT_LOGO_LAYOUT, downloadName, focusPull, fontSize, introAss, introSpan, logoFilters, metadataArgs, mvTags } from "@/lib/branding";
 import { DEFAULT_EDIT_OPTIONS, mergeEditOptions } from "@/lib/edit";
 import { readFontInfo } from "@/lib/fonts";
 import { gainDecision, parseEbur128, retryGain, volumeFilter } from "@/lib/loudness";
@@ -112,10 +112,39 @@ describe("logo / intro (branding.py)", () => {
     expect(fontSize("A".repeat(60), 81, 1920)).toBe(52);
   });
 
-  it("thông tin video và gộp tuỳ chọn cũ", () => {
-    expect(metadataArgs({ title: "Ferris", artist: "Bokin", genre: "Rock & Roll", year: "", comment: "" })).toEqual([
-      "-metadata", "title=Ferris", "-metadata", "artist=Bokin", "-metadata", "genre=Rock & Roll",
+  it("thông tin MP4 tự lấy từ gợi ý YouTube lúc dựng kịch bản", () => {
+    const mv = {
+      youtube_titles: ["Ferris Wheel Heart | 1950s Rock & Roll Love Story", "B", "C"],
+      youtube_description: "Imagine turning the dial…\r\nA summer night on the pier.\n\n#rockandroll #1950s #doowop #rockandroll",
+      idea: { id: "9", world_location: "Santa Monica Pier 1955", theme_code: "T01", outline: "", song_title: "Ferris Wheel Heart" },
+    };
+    const tags = mvTags(mv, { artist: "Bokin Rock & Roll", genre: "Rock & Roll" }, new Date("2026-10-19"));
+    expect(tags).toEqual({
+      title: "Ferris Wheel Heart | 1950s Rock & Roll Love Story",
+      description: "Imagine turning the dial…\nA summer night on the pier.\n\n#rockandroll #1950s #doowop #rockandroll",
+      keywords: ["rockandroll", "1950s", "doowop"],
+      artist: "Bokin Rock & Roll",
+      genre: "Rock & Roll",
+      year: "2026",
+    });
+    expect(metadataArgs(tags)).toEqual([
+      "-metadata", "title=Ferris Wheel Heart | 1950s Rock & Roll Love Story",
+      "-metadata", "artist=Bokin Rock & Roll",
+      "-metadata", "genre=Rock & Roll",
+      "-metadata", "date=2026",
+      "-metadata", `comment=${tags.description}`,
+      "-metadata", `description=${tags.description}`,
+      "-metadata", "keywords=rockandroll, 1950s, doowop",
     ]);
+    // Chưa có gợi ý tiêu đề → tên bài; tên file tải về bỏ ký tự Windows không cho phép.
+    const bare = mvTags({ ...mv, youtube_titles: ["", " "], youtube_description: "Old description." }, { artist: "", genre: "Rock & Roll" });
+    expect(bare.title).toBe("Ferris Wheel Heart");
+    expect(bare.keywords).toEqual(["Rock & Roll", "Santa Monica Pier 1955"]);
+    expect(downloadName(tags.title)).toBe("Ferris Wheel Heart 1950s Rock & Roll Love Story.mp4");
+    expect(downloadName('Tình yêu: "Đu quay"?')).toBe("Tình yêu Đu quay.mp4");
+  });
+
+  it("gộp tuỳ chọn cũ", () => {
     const old = mergeEditOptions({ pace: "fast", loudness: { enabled: false } } as never);
     expect(old.pace).toBe("fast");
     expect(old.loudness).toEqual({ ...DEFAULT_EDIT_OPTIONS.loudness, enabled: false });

@@ -295,9 +295,7 @@ export default function RenderQueuePage() {
                       </td>
                       <td className="px-2 py-1.5">{m.audio ? `✓ ${formatClock(m.audio.duration, 0)}` : <span className="text-cherry-dark">✗ chưa có</span>}</td>
                       <td className="px-2 py-1.5">
-                        <span className={m.clip_count === 0 ? "text-cherry-dark" : m.clip_count < m.shot_count ? "text-amber-800" : ""}>
-                          {m.clip_count}/{m.shot_count}
-                        </span>
+                        <span className={m.clip_count === 0 ? "text-cherry-dark" : ""}>{m.clip_count ? `${m.clip_count} clip` : "✗ chưa có"}</span>
                       </td>
                       <td className="px-2 py-1.5 text-xs">
                         {m.last_render ? (

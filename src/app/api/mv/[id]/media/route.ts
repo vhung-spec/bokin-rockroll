@@ -3,7 +3,7 @@ import { UserError } from "@/lib/errors";
 import { findFfmpeg } from "@/lib/ffmpeg";
 import { errorResponse, readJsonBody } from "@/lib/http";
 import { SHARED_ID } from "@/lib/edit";
-import { addAudio, addClip, loadProject, projectBytes, removeAudio, removeClip, removeRender, setBpm, setOptions, swapClips } from "@/lib/media";
+import { addAudio, addClip, loadProject, projectBytes, removeAllClips, removeAudio, removeClip, removeRender, setBpm, setOptions, swapClips } from "@/lib/media";
 import { getJob, isRendering } from "@/lib/render";
 import { zEditOptions } from "@/lib/schemas";
 import { loadMV } from "@/lib/store";
@@ -20,9 +20,11 @@ function notWhileRendering(id: string) {
   if (isRendering(id)) throw new UserError("Đang dựng video — chờ xong hoặc huỷ rồi mới đổi nhạc / clip.", 409);
 }
 
+/** Số cảnh của MV, hoặc số "clip thêm" sau cảnh cuối (khi có nhiều clip hơn số cảnh). */
 function shotParam(mv: Awaited<ReturnType<typeof mvOr404>>, raw: unknown): number {
   const n = Number(raw);
-  if (!mv.shots.some((s) => s.shot_no === n)) throw new UserError(`MV không có cảnh #${raw}.`);
+  const last = Math.max(0, ...mv.shots.map((s) => s.shot_no));
+  if (!Number.isInteger(n) || n < 1 || n > last + 200) throw new UserError(`Số cảnh không hợp lệ: ${raw}.`);
   return n;
 }
 
@@ -66,7 +68,7 @@ export async function PUT(req: Request, { params }: Ctx) {
   }
 }
 
-/** Xoá nhạc (?kind=audio), clip của một cảnh (?kind=clip&shot=3) hoặc một bản đã dựng (?kind=render&file=…). */
+/** Xoá nhạc (?kind=audio), clip của một cảnh (?kind=clip&shot=3), mọi clip (?kind=clips) hoặc một bản đã dựng (?kind=render&file=…). */
 export async function DELETE(req: Request, { params }: Ctx) {
   try {
     const { id } = await params;
@@ -78,6 +80,7 @@ export async function DELETE(req: Request, { params }: Ctx) {
       notWhileRendering(id);
       if (kind === "audio") await removeAudio(id);
       else if (kind === "clip") await removeClip(id, shotParam(mv, url.searchParams.get("shot")));
+      else if (kind === "clips") await removeAllClips(id);
       else throw new UserError("kind không hợp lệ.");
     }
     return NextResponse.json(await state(id));

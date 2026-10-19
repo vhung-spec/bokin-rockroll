@@ -3,7 +3,7 @@
 // (setpts=PTS+giây bắt đầu) trước các hiệu ứng, nên logo mờ dần, intro và nền mờ nối liền qua các nhát cắt.
 // Chữ được đọc từ file (không bao giờ chèn chữ của người dùng vào filtergraph): ASS (libass) hoặc drawtext textfile.
 
-import type { IntroConfig, LogoLayout, VideoMetadata } from "./types";
+import type { IntroConfig, LogoLayout, Mp4Tags, MVResult, VideoMetadata } from "./types";
 
 export const LOGO_POSITIONS: { value: LogoLayout["position"]; label: string }[] = [
   { value: "top-left", label: "Góc trên trái" },
@@ -23,7 +23,7 @@ export const DEFAULT_LOGO_LAYOUT: LogoLayout = {
   start_seconds: 0,
 };
 export const DEFAULT_INTRO: IntroConfig = { enabled: false, title: "", subtitle: "", seconds: 6, background_blur: true, blur_percent: 50 };
-export const DEFAULT_METADATA: VideoMetadata = { title: "", artist: "", genre: "Rock & Roll", year: "", comment: "" };
+export const DEFAULT_METADATA: VideoMetadata = { artist: "", genre: "Rock & Roll" };
 
 /** Logo có giây bắt đầu thì mờ dần hiện ra trong khoảng này. */
 export const LOGO_FADE_IN = 0.6;
@@ -209,15 +209,52 @@ export function introText(intro: IntroConfig, title: string, w: number, h: numbe
   return chain;
 }
 
-/** -metadata cho thẻ kiểu iTunes mà Windows Explorer đọc được (tiêu đề, tác giả, thể loại, năm, ghi chú). */
-export function metadataArgs(meta: VideoMetadata): string[] {
+/** Văn bản nhiều dòng (mô tả): NFC, giữ xuống dòng, bỏ ký tự điều khiển khác. */
+export function cleanMultiline(text: string, limit = 4000): string {
+  return text
+    .normalize("NFC")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\u0000-\u0009\u000b-\u001f]+/g, " ")
+    .trim()
+    .slice(0, limit);
+}
+
+/**
+ * Thông tin MP4 của một MV, điền tự động từ gợi ý lúc dựng kịch bản:
+ * tiêu đề = gợi ý tiêu đề YouTube số 1, mô tả = mô tả YouTube, từ khoá = hashtag trong mô tả, năm = năm dựng.
+ * Tên kênh và thể loại là thiết lập chung.
+ */
+export function mvTags(mv: Pick<MVResult, "youtube_titles" | "youtube_description" | "idea">, meta: VideoMetadata, now = new Date()): Mp4Tags {
+  const title = cleanText((mv.youtube_titles ?? []).find((t) => t.trim()) || mv.idea.song_title || mv.idea.world_location, 200);
+  const description = cleanMultiline(mv.youtube_description ?? "");
+  const tags = [...new Set([...description.matchAll(/#([\p{L}\p{N}_]+)/gu)].map((m) => m[1]))].slice(0, 30);
+  // Mô tả không có hashtag (MV tạo trước đây): dùng thể loại + địa điểm làm từ khoá.
+  const keywords = tags.length ? tags : [meta.genre, mv.idea.world_location].map((k) => cleanText(k, 100)).filter(Boolean);
+  return { title, description, keywords, artist: cleanText(meta.artist, 200), genre: cleanText(meta.genre, 100), year: String(now.getFullYear()) };
+}
+
+/** -metadata cho thẻ kiểu iTunes mà Windows Explorer đọc được (tiêu đề, mô tả, tác giả, thể loại, năm, từ khoá). */
+export function metadataArgs(tags: Mp4Tags): string[] {
   const pairs: [string, string][] = [
-    ["title", meta.title],
-    ["artist", meta.artist],
-    ["genre", meta.genre],
-    ["date", meta.year],
-    ["comment", meta.comment],
-    ["description", meta.comment],
+    ["title", tags.title],
+    ["artist", tags.artist],
+    ["genre", tags.genre],
+    ["date", tags.year],
+    ["comment", tags.description],
+    ["description", tags.description],
+    ["keywords", tags.keywords.join(", ")],
   ];
-  return pairs.flatMap(([k, v]) => (v.trim() ? ["-metadata", `${k}=${cleanText(v, 1000)}`] : []));
+  return pairs.flatMap(([k, v]) => (v.trim() ? ["-metadata", `${k}=${v}`] : []));
+}
+
+/** Tên file tải về theo tiêu đề video (bỏ ký tự Windows không cho phép trong tên file). */
+export function downloadName(title: string): string {
+  const base = cleanText(title, 200)
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[. ]+$/, "")
+    .trim()
+    .slice(0, 120)
+    .trim();
+  return `${base || "MV"}.mp4`;
 }

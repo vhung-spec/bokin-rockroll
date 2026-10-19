@@ -64,9 +64,11 @@ Khi công cụ tạo video trả clip về, app **ghép clip với nhạc thành
 Trên trang kết quả của MV bấm **🎬 Ghép video với nhạc**:
 
 1. **Bài hát**: chọn hoặc thả file nhạc (MP3, WAV, M4A, FLAC…). App đo độ dài, **nhận nhịp (BPM)** và vẽ dạng sóng âm.
-2. **Clip video**: bấm **Tải nhiều clip một lúc** (hoặc kéo thả cả thư mục). File có số cảnh trong tên — `shot-03.mp4`, `cảnh 3.mov`, `03.mp4` — tự vào đúng cảnh;
-   file không có số (vd. `veo_20261019_101500.mp4`) được xếp **theo thứ tự tên file** vào các cảnh còn trống — nên tải clip về theo đúng thứ tự cảnh.
-   Xếp sai thì dùng **Chuyển sang…** ở từng cảnh. Mỗi ô cảnh có sẵn nút **Copy prompt** để tạo lại clip còn thiếu.
+2. **Clip video**: **thả tất cả clip (hoặc cả thư mục) vào một lần** — hoặc bấm **Chọn clip** / **Chọn cả thư mục**. Không cần chọn cho từng cảnh:
+   app tự xếp — file có số cảnh trong tên (`shot-03.mp4`, `cảnh 3.mov`, `03.mp4`) vào đúng chỗ, còn lại theo **thứ tự tên file**
+   (nên tải clip về theo thứ tự cảnh, vd. `veo_20261019_101500.mp4`, `veo_20261019_102233.mp4`…). Có **nhiều clip hơn số cảnh** cũng được:
+   clip thêm được phát nối tiếp sau cảnh cuối. Các clip hiện thành một dải theo đúng thứ tự phát; muốn tải bộ khác thì **Xoá tất cả clip**.
+   Mục **Sửa từng cảnh** (không bắt buộc) để thay / chuyển một clip, hoặc copy prompt cho cảnh còn thiếu.
 3. **Cách dựng** — chọn một trong hai cách ghép:
    - **Ghép nguyên clip, lặp đến hết bài** (mặc định): mỗi clip phát **trọn vẹn** (không cắt nhỏ) theo thứ tự cảnh 1 → N; hết lượt thì lặp lại từ clip 1
      cho tới khi hết nhạc, clip cuối được cắt đúng lúc bài kết thúc. Ví dụ 20 clip × 8 giây = một vòng 2:40; bài 3:00 → phát 20 clip rồi lặp thêm 3 clip đầu.
@@ -80,7 +82,9 @@ Trên trang kết quả của MV bấm **🎬 Ghép video với nhạc**:
    - **Chất lượng xuất**: YouTube (đẹp nhất) hoặc Nhanh (để xem thử).
    - **Logo kênh** ở góc: vị trí, cỡ, độ hiện, lề, cắt tròn, hiện từ giây thứ mấy.
    - **Intro tiêu đề**: tiêu đề (để trống = tên bài), dòng phụ (vd. tên kênh), độ dài, độ nhoè nền, font riêng (.ttf/.otf) nếu muốn.
-   - **Thông tin video** ghi vào file MP4 (tiêu đề, kênh, thể loại, năm, ghi chú — Windows Explorer đọc được).
+   - **Thông tin video** ghi vào file MP4 **tự động cho từng MV** từ gợi ý lúc dựng kịch bản: tiêu đề = gợi ý tiêu đề YouTube số 1,
+     mô tả = mô tả YouTube, từ khoá = các hashtag trong mô tả, năm = năm dựng; chỉ cần nhập một lần **tên kênh** và **thể loại**.
+     File tải về cũng mang tên theo tiêu đề đó — YouTube lấy tên file làm tiêu đề mặc định khi upload.
    - **Xem thử khung hình** ở một giây bất kỳ để kiểm tra logo / intro mà không cần dựng cả video.
 5. Bấm **Dựng video** → xem ngay trên trang và **Tải MP4 về máy**. File cũng nằm trong `data/media/<mã MV>/`.
    Dưới video có báo cáo: âm lượng trước → sau, đỉnh tiếng, và kết quả kiểm tra (đủ khung hình, độ dài hình/tiếng).
