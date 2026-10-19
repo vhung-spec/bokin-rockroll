@@ -13,7 +13,7 @@
   "concurrency": 2,
   "allowVehicleMakes": true,
   "channelVoice": "Imagine turning the dial of an old tabletop radio… Warm, nostalgic, second-person storytelling that invites the listener into a summer night in 1950s America.",
-  "mockMode": false,
+  "engine": "auto",
   "songStructure": [
     {
       "name": "Intro",

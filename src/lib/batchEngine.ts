@@ -104,7 +104,12 @@ class BatchEngine {
     const mine = () => this.item(key)?.run === run;
     try {
       const it = this.item(key)!;
-      const mv = await api<MVResult>("/api/generate", { method: "POST", json: { idea: it.idea, tone: this.batch!.tone }, signal: ctrl.signal });
+      const res = await api<MVResult | { kind: "draft" }>("/api/generate", { method: "POST", json: { idea: it.idea, tone: this.batch!.tone }, signal: ctrl.signal });
+      if (mine() && "kind" in res) {
+        this.update(() => Object.assign(this.item(key)!, { status: "done", draft: true, finished_at: Date.now() }));
+        return;
+      }
+      const mv = res as MVResult;
       if (mine()) {
         this.update(() =>
           Object.assign(this.item(key)!, {
@@ -113,6 +118,7 @@ class BatchEngine {
             shots: mv.shots.length,
             errors: mv.issues.filter((i) => i.severity === "error").length,
             warnings: mv.issues.filter((i) => i.severity === "warning").length,
+            cost_usd: mv.usage?.cost_usd ?? 0,
             finished_at: Date.now(),
           }),
         );

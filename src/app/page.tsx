@@ -2,12 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import CostEstimate from "@/components/CostEstimate";
 import { Card, ErrorBox, Field, Spinner } from "@/components/ui";
 import { createBatch, unfinished } from "@/lib/batch";
 import { batchEngine } from "@/lib/batchEngine";
 import { api } from "@/lib/client";
 import { extractYear, matchLocation, parseDuration, parseTempo, splitThemeCell, type ParseResult } from "@/lib/parser";
 import type { IdeaRow, LocationLibrary, ThemeLibrary, Tone } from "@/lib/types";
+import { useStatus } from "@/lib/useStatus";
 
 const SAMPLE = `1 | Hollywood Boulevard Summer 1954 | T01 Sét ái tình       | Chàng trai bắt gặp cô gái bước ra khỏi rạp phim giữa Boulevard đông đúc; chỉ một ánh mắt khiến cả Hollywood như biến mất.
 2 | Hollywood Drive-In Night 1956    | T11 Nụ hôn diệu kỳ    | Buổi hẹn đầu ở drive-in; bộ phim chẳng còn quan trọng sau nụ hôn đầu dưới ánh sáng màn chiếu.
@@ -51,6 +53,7 @@ export default function HomePage() {
   const [tone, setTone] = useState<Tone>("default");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { status } = useStatus();
 
   useEffect(() => {
     api<ThemeLibrary>("/api/library/themes").then(setThemes).catch(() => {});
@@ -60,12 +63,40 @@ export default function HomePage() {
   const set = (k: keyof typeof emptyForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  function startBatch(ideas: IdeaRow[]) {
+  async function startBatch(ideas: IdeaRow[]) {
+    if (status?.mode === "manual") {
+      // claude.ai: tạo bản nháp, người dùng copy yêu cầu và dán câu trả lời ở trang claude.ai.
+      setBusy(true);
+      try {
+        await api("/api/drafts", { method: "POST", json: { ideas, tone } });
+        router.push("/manual");
+      } catch (e) {
+        setError((e as Error).message);
+        setBusy(false);
+      }
+      return;
+    }
     batchEngine.ensureLoaded();
     const left = unfinished(batchEngine.batch);
     if (left && !window.confirm(`Batch hiện tại còn ${left} MV chưa chạy xong. Thay bằng batch mới?`)) return;
     batchEngine.replace(createBatch(ideas, tone));
     router.push("/batch?autostart=1");
+  }
+
+  function singleIdea(): IdeaRow | null {
+    if (!form.world_location.trim() || !form.outline.trim()) return null;
+    const { code, name } = splitThemeCell(form.theme);
+    const duration = form.duration ? parseDuration(form.duration) : undefined;
+    return {
+      id: form.id.trim() || "1",
+      world_location: form.world_location.trim(),
+      theme_code: code,
+      theme_name: name ?? themes[code]?.name,
+      outline: form.outline.trim(),
+      ...(duration && { duration_sec: duration }),
+      ...parseTempo(form.tempo),
+      ...(form.lyrics.trim() && { lyrics: form.lyrics }),
+    };
   }
 
   function submitSingle(e: React.FormEvent) {
@@ -202,10 +233,13 @@ export default function HomePage() {
                   <textarea className="input min-h-24 font-mono text-xs" value={form.lyrics} onChange={set("lyrics")} />
                 </Field>
               </div>
+              <div className="md:col-span-6">
+                <CostEstimate ideas={[singleIdea()].filter((x): x is IdeaRow => Boolean(x))} themes={themes} status={status} />
+              </div>
               <div className="flex flex-wrap items-center gap-3 md:col-span-6">
                 <ToneSelect tone={tone} setTone={setTone} />
-                <button type="submit" className="btn-primary ml-auto">
-                  Sinh MV →
+                <button type="submit" className="btn-primary ml-auto" disabled={busy}>
+                  {busy && <Spinner />} {status?.mode === "manual" ? "Tạo yêu cầu cho claude.ai →" : "Sinh MV →"}
                 </button>
               </div>
             </form>
@@ -278,12 +312,16 @@ export default function HomePage() {
           actions={
             <>
               <ToneSelect tone={tone} setTone={setTone} />
-              <button className="btn-primary" disabled={!validRows.length} onClick={() => startBatch(validRows)}>
-                Chạy batch ({validRows.length} MV) →
+              <button className="btn-primary" disabled={!validRows.length || busy} onClick={() => startBatch(validRows)}>
+                {busy && <Spinner />}{" "}
+                {status?.mode === "manual" ? `Tạo ${validRows.length} yêu cầu cho claude.ai →` : `Chạy batch (${validRows.length} MV) →`}
               </button>
             </>
           }
         >
+          <div className="mb-3">
+            <CostEstimate ideas={validRows} themes={themes} status={status} />
+          </div>
           <p className="mb-3 text-xs text-muted">
             Đã nhận diện {parsed.headerDetected ? "dòng tiêu đề" : "cột theo vị trí"} · tách bằng{" "}
             {{ tab: "tab", pipe: "dấu |", comma: "dấu phẩy", matrix: "ô Excel" }[parsed.delimiter]}.

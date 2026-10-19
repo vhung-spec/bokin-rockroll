@@ -1,19 +1,34 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { regenerateShot, updateShot } from "@/lib/generate";
+import { applyShotAnswer, regenerateShot, shotRegenManualPrompt, updateShot } from "@/lib/generate";
+import { AnswerError } from "@/lib/manual";
 import { errorResponse, readJsonBody } from "@/lib/http";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Sinh lại một cảnh (có thể kèm yêu cầu, ví dụ "góc máy khác"). */
+/**
+ * Sinh lại một cảnh (có thể kèm yêu cầu, ví dụ "góc máy khác").
+ * Chế độ claude.ai: { manual: "prompt" } → trả về yêu cầu để copy; { answer } → áp dụng câu trả lời đã dán.
+ */
 export async function POST(req: Request, { params }: Ctx) {
   try {
     const { id } = await params;
     const body = z
-      .object({ shot_no: z.number().int().min(1), instruction: z.string().max(500).optional() })
+      .object({
+        shot_no: z.number().int().min(1),
+        instruction: z.string().max(500).optional(),
+        manual: z.literal("prompt").optional(),
+        answer: z.string().max(200_000).optional(),
+      })
       .parse(await readJsonBody(req));
+    if (body.manual === "prompt") {
+      const prompt = await shotRegenManualPrompt(id, body.shot_no, body.instruction ?? "");
+      return NextResponse.json({ prompt, chars: prompt.length });
+    }
+    if (body.answer !== undefined) return NextResponse.json(await applyShotAnswer(id, body.shot_no, body.answer));
     return NextResponse.json(await regenerateShot(id, body.shot_no, body.instruction ?? "", req.signal));
   } catch (err) {
+    if (err instanceof AnswerError) return NextResponse.json({ error: err.message }, { status: 422 });
     return errorResponse(err);
   }
 }

@@ -12,52 +12,62 @@ Chạy được **hàng loạt** (ví dụ 50 bài một lần) và xuất **XLS
 
 ---
 
-## 1. Cài đặt
+## 1. Bắt đầu nhanh (không cần biết code)
 
-Yêu cầu: **Node.js 20.9 trở lên** (khuyên dùng Node 22 LTS) — tải tại <https://nodejs.org>.
+1. **Cài Node.js** (một lần): tải bản **LTS** tại <https://nodejs.org> và cài như phần mềm bình thường.
+2. **Tải app**: trên GitHub bấm **Code → Download ZIP**, rồi giải nén ra một thư mục (ví dụ `Documents/MV Prompt Studio`).
+3. **Mở app**: bấm đúp vào
+   - Windows: **`Chay-MV-Prompt-Studio.bat`**
+   - macOS: **`Chay-MV-Prompt-Studio.command`** (lần đầu: chuột phải → *Open* → *Open* để macOS cho phép chạy.
+     Nếu báo không có quyền chạy: mở Terminal, gõ `bash ` rồi kéo file này vào cửa sổ Terminal và nhấn Enter.)
 
-```bash
-git clone <địa chỉ repo này>
-cd bokin-rockroll
-npm install
-```
+   Lần đầu app tự cài thư viện và chuẩn bị (vài phút), các lần sau chỉ vài giây. Trình duyệt tự mở trang app.
+   **Giữ cửa sổ đen (terminal) mở** trong khi dùng; đóng nó là tắt app.
+4. Vào **Cài đặt → Cách tạo nội dung** và chọn một trong hai cách bên dưới.
 
-### API key của Claude
+### Chọn cách tạo nội dung
 
-1. Lấy API key tại <https://platform.claude.com/settings/keys>.
-2. Sao chép file mẫu và điền key:
+| | **claude.ai (copy – dán)** | **Claude API** |
+|---|---|---|
+| Cần gì | Tài khoản claude.ai (Free/Pro/Max) | API key (trả phí theo token) |
+| Chi phí | **0 đ** phí API (dùng gói claude.ai của bạn) | khoảng **$0,10–0,20 / MV** (≈ 2.800–5.400 đ) với `claude-sonnet-5-5` |
+| Cách làm | Mỗi MV: bấm **Copy yêu cầu** → dán vào claude.ai → dán câu trả lời lại vào app | Bấm **Chạy batch**, app tự làm hết (50 bài một lần) |
+| Hợp với | Làm vài bài mỗi ngày | Làm hàng loạt |
 
-   ```bash
-   cp .env.example .env
-   ```
+- Chế độ **Tự động** (mặc định): có API key thì dùng API, chưa có thì dùng claude.ai.
+- **Nhập API key ngay trong app**: Cài đặt → *API key của Claude* → dán key → **Lưu key** (app kiểm tra key luôn). Key được lưu trong file `.env.local` trên máy bạn.
+  Lấy key tại <https://platform.claude.com/settings/keys>.
+- Còn chế độ **Demo** (ghép từ mẫu, không dùng AI) để thử giao diện.
 
-   Mở `.env` và sửa dòng: `ANTHROPIC_API_KEY=sk-ant-...`
+### Chi phí ($ và đ)
 
-> Không có API key? Công cụ vẫn chạy ở **chế độ demo**: storyboard được ghép từ mẫu có sẵn trong thư viện (không dùng AI) — tiện để thử giao diện, quy trình batch và xuất file.
+- Trước khi chạy, bảng xem trước hiện **ước tính chi phí** cho cả batch và trung bình mỗi MV.
+- Sau khi chạy bằng API, app ghi **chi phí thật** (theo số token Claude báo về, gồm cả các lần sinh lại cảnh) ở trang kết quả, trang batch (tổng cả batch),
+  Lịch sử (từng MV, tổng series, tổng phần đã chọn) và sheet “Tổng quan” trong file XLSX.
+- Sửa **bảng giá** và **tỷ giá đ/USD** ở Cài đặt → *Chi phí & tỷ giá* (mặc định 26.000 đ/USD). Chi phí render clip trên Veo/Kling… không tính ở đây.
 
-## 2. Chạy
-
-```bash
-npm run dev
-```
-
-Mở trình duyệt tại <http://localhost:3000>.
-
-Chạy bản tối ưu (nhanh hơn):
-
-```bash
-npm run build
-npm start
-```
-
-## 3. Cách dùng nhanh
+## 2. Cách dùng
 
 1. **Nhập ý tưởng** → tab **Dán bảng** → bấm **“Dùng 5 dòng ví dụ”** (hoặc dán bảng của bạn từ Google Docs/Sheets) → **Đọc bảng & xem trước**.
-   Bảng xem trước cho biết năm, địa điểm đã khớp thư viện hay sẽ tự suy luận, chủ đề có trong thư viện chưa.
-2. Bấm **Chạy batch** → trang **Chạy batch** hiện thanh tiến trình. Có thể **Tạm dừng**, **Dừng ngay**, **Chạy tiếp**, **Thử lại mục lỗi**.
-   Batch vẫn chạy khi bạn chuyển sang xem trang khác; nếu tải lại trang, bấm “Chạy tiếp”.
-3. Bấm **Mở storyboard** để xem từng MV: mỗi cảnh có nút **Copy prompt**, **Sinh lại cảnh này** (kèm yêu cầu, vd. “góc máy khác”) và **Sửa tay**.
+   Bảng xem trước cho biết năm, địa điểm đã khớp thư viện hay sẽ tự suy luận, chủ đề có trong thư viện chưa, số prompt và chi phí ước tính.
+2. - **Claude API**: bấm **Chạy batch** → trang **Chạy batch** hiện thanh tiến trình. Có thể **Tạm dừng**, **Dừng ngay**, **Chạy tiếp**, **Thử lại mục lỗi**.
+     Batch vẫn chạy khi bạn chuyển sang xem trang khác; nếu tải lại trang, bấm “Chạy tiếp”.
+   - **claude.ai**: bấm **Tạo … yêu cầu cho claude.ai** → trang **claude.ai** liệt kê từng MV với 3 bước: **Copy yêu cầu** → **Mở claude.ai** (cuộc trò chuyện mới, dán, gửi)
+     → dán câu trả lời của Claude vào ô và bấm **Hoàn tất MV**.
+3. Bấm **Mở storyboard** để xem từng MV: mỗi cảnh có nút **Copy prompt**, **Sinh lại cảnh này** (kèm yêu cầu, vd. “góc máy khác”; ở chế độ claude.ai cũng là copy – dán) và **Sửa tay**.
 4. Xuất file: **XLSX** (sheet “Tổng quan” + mỗi MV một sheet), **CSV** (có cột `mv_id`), **MD/TXT** (đọc nhanh), **JSON** (nhập lại được ở trang Lịch sử), **Copy tất cả prompt** (mỗi prompt một dòng), hoặc **File prompt (.txt)**: chỉ gồm các prompt, mỗi prompt cách nhau một dòng trống — tiện nhập hàng loạt vào công cụ tạo video. Có ở trang batch, trang kết quả và Lịch sử (cả theo series).
+
+### Cách chạy cho người dùng dòng lệnh
+
+```bash
+npm install
+npm run dev          # http://127.0.0.1:3000 (tự cập nhật khi sửa mã)
+# hoặc bản tối ưu:
+npm run build && npm start
+# hoặc giống file bấm đúp: node scripts/start.mjs
+```
+
+API key cũng có thể đặt trong file `.env` (xem `.env.example`). App chỉ mở trên máy của bạn (`127.0.0.1`), máy khác trong mạng không truy cập được.
 
 ### Định dạng bảng đầu vào
 
@@ -78,7 +88,7 @@ Mỗi dòng: `id | world_location | theme | outline | [tên bài] | [thời lư�
 
 Upload **CSV/XLSX**: dòng đầu là tiêu đề cột như trên (sheet đầu tiên của file XLSX được đọc).
 
-## 4. Logic sinh MV
+## 3. Logic sinh MV
 
 1. **Character Bible** — Claude tạo cặp đôi HE/SHE (hoặc dùng **cặp đôi cố định cho cả series** nếu bật trong Cài đặt).
    Claude viết prompt với placeholder `{{HE}}`, `{{SHE}}`; công cụ thay bằng mô tả nguyên văn, nên nhân vật luôn đồng nhất.
@@ -96,7 +106,7 @@ Upload **CSV/XLSX**: dòng đầu là tiêu đề cột như trên (sheet đầu
 Sau khi sinh: **era check** (`src/lib/eraCheck.ts`) theo `data/era_rules.json` và quy tắc riêng của địa điểm, kiểm tra độ dài, style, tiếng Việt lẫn trong prompt,
 chữ trên màn hình, thương hiệu/người thật, và so sánh với các MV khác **cùng series** để cảnh báo cảnh trùng lặp.
 
-## 5. Thư viện cấu hình (`data/`)
+## 4. Thư viện cấu hình (`data/`)
 
 Sửa trên giao diện (trang **Thư viện**) hoặc sửa trực tiếp file JSON:
 
@@ -106,21 +116,23 @@ Sửa trên giao diện (trang **Thư viện**) hoặc sửa trực tiếp file 
 | `locations.json` | 24 địa điểm California – Las Vegas – Route 66 – New York (landmark, xe, trang phục, đạo cụ, ánh sáng, thứ **không được xuất hiện**). Địa điểm chưa có sẽ được Claude tự suy luận và lưu với `auto_generated: true` để bạn duyệt. |
 | `era_rules.json` | Quy tắc theo từng năm 1950–1959, vật dụng theo năm ra đời (hula hoop 1958, Thunderbird 1955…), đồ hiện đại bị cấm, thương hiệu/người thật. |
 | `style_presets.json` | Kodachrome 35mm (mặc định), Technicolor musical, Black & white noir, Faded home-movie 8mm. |
+| `pricing.json` | Giá Claude API (USD / 1 triệu token) theo model và tỷ giá đ/USD — dùng để quy đổi chi phí. |
 | `video_models.json` | Veo, Kling, Hailuo, Sora, Runway: giới hạn ký tự, độ dài clip, có âm thanh hay không, cách viết prompt. |
 | `settings.json` | Cài đặt (model, công cụ video, độ dài clip, số cảnh tối thiểu–tối đa, lặp cảnh, cặp đôi cố định, số luồng song song…). |
 | `couples.json` | Cặp đôi cố định đã lưu cho từng series. |
 
-Dữ liệu sinh ra khi chạy (không commit): `data/history/` (lịch sử MV, mỗi MV một file JSON) và `data/uploads/` (ảnh tham chiếu nhân vật).
+Dữ liệu sinh ra khi chạy (không commit): `data/history/` (lịch sử MV, mỗi MV một file JSON), `data/drafts/` (MV đang chờ câu trả lời từ claude.ai) và `data/uploads/` (ảnh tham chiếu nhân vật).
 
-## 6. Cài đặt đáng chú ý
+## 5. Cài đặt đáng chú ý
 
 - **Model**: mặc định `claude-sonnet-5-5`; đổi được trong trang Cài đặt. **Effort** `medium` là cân bằng tốt giữa chất lượng và tốc độ.
 - **Fallback khi bị từ chối**: bật sẵn (server-side fallback của Claude API).
 - **Số MV chạy song song**: mặc định 2 — giảm xuống nếu gặp lỗi *rate limit*.
 - **Cặp đôi cố định cho cả series**: bật lên thì 50 MV cùng series dùng chung một cặp đôi.
-- **Chế độ demo**: bật để thử mà không tốn API.
+- **Cách tạo nội dung**: Tự động / claude.ai (copy – dán) / Claude API / Demo.
+- **Số cảnh mỗi MV**: mặc định 15–20 (= 15–20 prompt); bật “Cảnh sẽ được lặp lại khi dựng” để mỗi cảnh độc lập, dùng lại được.
 
-## 7. Tính năng khác
+## 6. Tính năng khác
 
 - **Sinh lại toàn MV với giọng khác** (vui tươi hơn, buồn hơn, điện ảnh hơn) — tạo phiên bản mới, bản cũ vẫn giữ trong Lịch sử.
 - **Sửa Character Bible** trên trang kết quả → tự ghép lại toàn bộ prompt (trừ cảnh đã sửa tay); có thể lưu làm cặp đôi cố định của series.
@@ -128,10 +140,10 @@ Dữ liệu sinh ra khi chạy (không commit): `data/history/` (lịch sử MV,
 - **Ảnh tham chiếu nhân vật** (cho image-to-video): upload trên trang kết quả, đường dẫn được ghi vào Character Bible và file xuất.
 - **Lịch sử**: tìm theo tên bài, địa điểm, series, chủ đề; chọn nhiều MV để xuất; **XLSX cả series**; nhập lại file JSON.
 
-## 8. Dành cho người phát triển
+## 7. Dành cho người phát triển
 
 ```bash
-npm test          # unit test (cấu trúc bài hát, parser, era check, ghép prompt, pipeline, gọi Claude giả lập)
+npm test          # unit test (cấu trúc bài hát, parser, era check, ghép prompt, pipeline, chế độ claude.ai, chi phí, gọi Claude giả lập)
 npm run typecheck
 ```
 
@@ -145,7 +157,10 @@ src/lib/
   llm.ts                gọi Claude (structured output, retry)
   prompts.ts            system prompt + user prompt
   llmSchemas.ts         JSON schema của kết quả
-  generate.ts           pipeline sinh MV, sinh lại cảnh, sửa tay
+  generate.ts           pipeline sinh MV, sinh lại cảnh, sửa tay, bản nháp claude.ai
+  manual.ts             chế độ claude.ai: yêu cầu để copy, đọc JSON dán về
+  cost.ts               quy đổi token → $ / đ, ước tính chi phí
+  apikey.ts             lưu API key vào .env.local
   assemble.ts           ghép prompt: Character Bible nguyên văn + style
   eraCheck.ts           kiểm tra niên đại, thương hiệu, chữ trên màn hình
   validate.ts           kiểm tra độ dài, nhịp dựng, signature shots…
@@ -153,6 +168,7 @@ src/lib/
   exporters.ts, xlsx.ts xuất CSV / MD / TXT / JSON / XLSX
   mock.ts               chế độ demo
   store.ts              đọc/ghi data/
-src/app/                các trang: Nhập ý tưởng, Chạy batch, Kết quả (/mv/[id]), Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
+src/app/                các trang: Nhập ý tưởng, Chạy batch, claude.ai (/manual), Kết quả (/mv/[id]), Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
+scripts/start.mjs       khởi động một lệnh (dùng bởi Chay-MV-Prompt-Studio.bat / .command)
 tests/                  vitest
 ```

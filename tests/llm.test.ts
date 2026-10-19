@@ -130,6 +130,9 @@ describe("callStructured", () => {
     });
     expect(res.data).toEqual({ ok: true });
     expect(res.attempts).toBe(2);
+    // không truyền giá → không tính được tiền
+    expect(res.usage.cost_unknown).toBe(true);
+    expect(res.usage.requests).toBe(2);
     expect(requests).toHaveLength(2);
     const body = requests[0].body as Record<string, any>;
     expect(body.model).toBe("claude-sonnet-5-5");
@@ -187,6 +190,9 @@ describe("generateMV qua Claude (giả lập)", () => {
     expect(mv.thumbnail_prompt).toContain(he);
     expect(mv.shots[0].negative_prompt).toContain("neon LED");
     expect(mv.usage!.output_tokens).toBeGreaterThan(0);
+    // 2 lần gọi × (100 token vào × $2 + 500 token ra × $10) / 1 triệu
+    expect(mv.usage!.requests).toBe(2);
+    expect(mv.usage!.cost_usd).toBeCloseTo((2 * (100 * 2 + 500 * 10)) / 1e6, 8);
   });
 
   it("thiếu cảnh: retry một lần rồi tự vá bằng cảnh mẫu", async () => {

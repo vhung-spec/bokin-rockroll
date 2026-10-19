@@ -2,33 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { MODE_LABEL, useStatus } from "@/lib/useStatus";
 
 const LINKS = [
   { href: "/", label: "Nhập ý tưởng" },
   { href: "/batch", label: "Chạy batch" },
+  { href: "/manual", label: "claude.ai" },
   { href: "/history", label: "Lịch sử" },
   { href: "/library", label: "Thư viện" },
   { href: "/settings", label: "Cài đặt" },
 ];
 
-interface Status {
-  mode: "claude" | "mock";
-  hasKey: boolean;
-  model: string;
-  videoModelName: string;
-}
+const MODE_STYLE = {
+  claude: "border-mint/60 bg-mint/15 text-mint",
+  manual: "border-sky-300/70 bg-sky-300/15 text-sky-200",
+  mock: "border-amber-300/70 bg-amber-300/15 text-amber-200",
+};
 
 export default function Nav() {
   const pathname = usePathname();
-  const [status, setStatus] = useState<Status | null>(null);
-
-  useEffect(() => {
-    fetch("/api/status")
-      .then((r) => r.json())
-      .then(setStatus)
-      .catch(() => setStatus(null));
-  }, [pathname]);
+  const { status } = useStatus([pathname]);
 
   return (
     <header className="border-b-4 border-cherry bg-ink text-cream">
@@ -40,30 +33,27 @@ export default function Nav() {
         <nav className="flex flex-wrap gap-1">
           {LINKS.map((l) => {
             const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
+            const count = l.href === "/manual" ? (status?.pendingDrafts ?? 0) : 0;
+            if (l.href === "/manual" && status && status.mode !== "manual" && !count) return null;
             return (
               <Link
                 key={l.href}
                 href={l.href}
-                className={`rounded-full px-3 py-1 text-sm font-semibold transition ${
-                  active ? "bg-cherry text-white" : "text-cream/90 hover:bg-white/10"
-                }`}
+                className={`rounded-full px-3 py-1 text-sm font-semibold transition ${active ? "bg-cherry text-white" : "text-cream/90 hover:bg-white/10"}`}
               >
                 {l.label}
+                {count > 0 && <span className="ml-1.5 rounded-full bg-amber-300 px-1.5 text-xs text-ink">{count}</span>}
               </Link>
             );
           })}
         </nav>
         <div className="ml-auto text-xs">
-          {status &&
-            (status.mode === "claude" ? (
-              <span className="badge border-mint/60 bg-mint/15 text-mint">
-                Claude · {status.model} → {status.videoModelName}
-              </span>
-            ) : (
-              <span className="badge border-amber-300/70 bg-amber-300/15 text-amber-200" title="Chưa có ANTHROPIC_API_KEY hoặc đang bật chế độ demo">
-                Chế độ demo (không gọi API) → {status.videoModelName}
-              </span>
-            ))}
+          {status && (
+            <Link href="/settings" className={`badge ${MODE_STYLE[status.mode]}`} title="Đổi chế độ trong Cài đặt">
+              {MODE_LABEL[status.mode]}
+              {status.mode === "claude" && <> · {status.model}</>} → {status.videoModelName}
+            </Link>
+          )}
         </div>
       </div>
     </header>

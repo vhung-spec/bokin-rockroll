@@ -2,21 +2,37 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { z } from "zod";
-import type { Settings } from "./types";
+import { callCost, emptyUsage } from "./cost";
+import type { ModelPrice, Settings, Usage } from "./types";
 
 // Các model hỗ trợ server-side fallback dạng "default" khi bị từ chối (refusal).
 const FALLBACK_MODELS = new Set(["claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-fable-5-1"]);
 
 let client: Anthropic | null = null;
+let clientKey: string | undefined;
 
 export function hasCredentials(): boolean {
   return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 }
 
 function getClient(): Anthropic {
-  // API key đọc từ biến môi trường ANTHROPIC_API_KEY (file .env) — không hard-code.
-  client ??= new Anthropic({ maxRetries: 4 });
+  // API key đọc từ biến môi trường ANTHROPIC_API_KEY (file .env / .env.local hoặc nhập trong Cài đặt) — không hard-code.
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!client || clientKey !== key) {
+    client = new Anthropic({ maxRetries: 4 });
+    clientKey = key;
+  }
   return client;
+}
+
+/** Kiểm tra API key + quyền dùng model (không tốn token). */
+export async function testConnection(model: string): Promise<{ ok: true; model: string } | { ok: false; error: string }> {
+  try {
+    const info = await getClient().models.retrieve(model);
+    return { ok: true, model: info.display_name ?? info.id };
+  } catch (err) {
+    return { ok: false, error: describeApiError(err).message };
+  }
 }
 
 export class LLMError extends Error {
@@ -38,17 +54,19 @@ export interface StructuredCall<T> {
   check?: (data: T) => string | null;
   maxTokens?: number;
   signal?: AbortSignal;
+  /** Giá của model đang gọi (để quy đổi ra tiền). */
+  price?: ModelPrice;
 }
 
 export interface StructuredResult<T> {
   data: T;
-  usage: { input_tokens: number; output_tokens: number };
+  usage: Usage;
   attempts: number;
 }
 
 function describeApiError(err: unknown): LLMError {
   if (err instanceof Anthropic.APIUserAbortError) return new LLMError("Đã dừng yêu cầu.", "aborted");
-  if (err instanceof Anthropic.AuthenticationError) return new LLMError("API key không hợp lệ — kiểm tra ANTHROPIC_API_KEY trong file .env.", "auth");
+  if (err instanceof Anthropic.AuthenticationError) return new LLMError("API key không hợp lệ hoặc đã bị thu hồi — kiểm tra lại key trong Cài đặt.", "auth");
   if (err instanceof Anthropic.PermissionDeniedError) return new LLMError(`API key không có quyền dùng model này: ${err.message}`, "auth");
   if (err instanceof Anthropic.NotFoundError) return new LLMError(`Không tìm thấy model — kiểm tra tên model trong Cài đặt. (${err.message})`, "api");
   if (err instanceof Anthropic.RateLimitError) return new LLMError("Bị giới hạn tốc độ (rate limit) — hãy giảm số luồng song song hoặc thử lại sau.", "rate_limit");
@@ -65,7 +83,7 @@ function describeApiError(err: unknown): LLMError {
  */
 export async function callStructured<T>(call: StructuredCall<T>): Promise<StructuredResult<T>> {
   const anthropic = getClient();
-  const usage = { input_tokens: 0, output_tokens: 0 };
+  const usage = emptyUsage();
   let lastError: LLMError | null = null;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -95,8 +113,20 @@ export async function callStructured<T>(call: StructuredCall<T>): Promise<Struct
       throw describeApiError(err);
     }
 
-    usage.input_tokens += message.usage.input_tokens + (message.usage.cache_read_input_tokens ?? 0) + (message.usage.cache_creation_input_tokens ?? 0);
-    usage.output_tokens += message.usage.output_tokens;
+    const u = {
+      input_tokens: message.usage.input_tokens,
+      output_tokens: message.usage.output_tokens,
+      cache_creation_input_tokens: message.usage.cache_creation_input_tokens ?? 0,
+      cache_read_input_tokens: message.usage.cache_read_input_tokens ?? 0,
+    };
+    usage.input_tokens += u.input_tokens;
+    usage.output_tokens += u.output_tokens;
+    usage.cache_creation_input_tokens! += u.cache_creation_input_tokens;
+    usage.cache_read_input_tokens! += u.cache_read_input_tokens;
+    usage.requests! += 1;
+    const cost = callCost(u, call.price);
+    if (cost === null) usage.cost_unknown = true;
+    else usage.cost_usd! += cost;
 
     if (message.stop_reason === "refusal") {
       const category = message.stop_details?.category ? ` (${message.stop_details.category})` : "";

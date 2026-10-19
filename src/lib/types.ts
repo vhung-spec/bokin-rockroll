@@ -105,6 +105,15 @@ export interface SongSection {
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
+/**
+ * Cách sinh nội dung:
+ * - auto: có API key thì gọi Claude API, không có thì dùng claude.ai (thủ công)
+ * - api: luôn gọi Claude API
+ * - manual: copy yêu cầu sang claude.ai rồi dán câu trả lời lại (không tốn phí API)
+ * - demo: ghép từ mẫu có sẵn, không dùng AI
+ */
+export type Engine = "auto" | "api" | "manual" | "demo";
+
 export interface Settings {
   model: string;
   effort: Effort;
@@ -121,7 +130,7 @@ export interface Settings {
   concurrency: number;
   allowVehicleMakes: boolean;
   channelVoice: string;
-  mockMode: boolean;
+  engine: Engine;
   songStructure: SongSection[];
 }
 
@@ -131,6 +140,34 @@ export interface Libraries {
   eraRules: EraRules;
   styles: StyleLibrary;
   videoModels: VideoModelLibrary;
+  pricing: Pricing;
+}
+
+/** Giá Claude API, USD cho 1 triệu token. */
+export interface ModelPrice {
+  input: number;
+  output: number;
+  cache_write: number;
+  cache_read: number;
+}
+
+export interface Pricing {
+  usd_to_vnd: number;
+  models: Record<string, ModelPrice>;
+  updated?: string;
+  note?: string;
+}
+
+/** Token đã dùng (cộng dồn qua các lần gọi) và chi phí quy đổi tại thời điểm gọi. */
+export interface Usage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  requests?: number;
+  cost_usd?: number;
+  /** true nếu có lần gọi dùng model không có trong bảng giá. */
+  cost_unknown?: boolean;
 }
 
 // ---------- Nhân vật ----------
@@ -247,7 +284,7 @@ export interface MVResult {
   theme_code: string;
   theme: Theme;
   tone: Tone;
-  generator: "claude" | "mock";
+  generator: "claude" | "mock" | "manual";
   model: string;
   video_model: string;
   style_key: string;
@@ -264,7 +301,7 @@ export interface MVResult {
   generation_notes: Issue[];
   issues: Issue[];
   duplicates: DuplicateReport[];
-  usage?: { input_tokens: number; output_tokens: number };
+  usage?: Usage;
 }
 
 /** Bản tóm tắt dùng cho trang Lịch sử. */
@@ -282,5 +319,19 @@ export interface MVSummary {
   shot_count: number;
   error_count: number;
   warning_count: number;
-  generator: "claude" | "mock";
+  generator: "claude" | "mock" | "manual";
+  cost_usd: number;
+}
+
+/** MV đang chờ câu trả lời từ claude.ai (chế độ thủ công). */
+export interface Draft {
+  id: string;
+  created_at: string;
+  idea: IdeaRow;
+  tone: Tone;
+  /** Ngữ cảnh đã dùng để tạo yêu cầu — câu trả lời được ghép theo đúng ngữ cảnh này. */
+  ctx?: unknown;
+  notes?: Issue[];
+  prompt_built_at?: string;
+  prompt_chars?: number;
 }

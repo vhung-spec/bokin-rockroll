@@ -2,7 +2,9 @@
 
 import { BASE_NEGATIVE, assemblePrompt, coreBudget, forceFit, joinNegative, placeholdersIn, reassembleShots } from "./assemble";
 import { findSeriesDuplicates, latestPerIdea, seriesAvoidList, seriesKey } from "./duplicates";
+import { addUsage, emptyUsage } from "./cost";
 import { LLMError, callStructured, hasCredentials } from "./llm";
+import { manualPrompt, parseAnswer, zGenerationLoose, zShotAnswerLoose } from "./manual";
 import {
   COUPLE_SCHEMA,
   GENERATION_SCHEMA,
@@ -33,13 +35,17 @@ import {
   type GenContext,
 } from "./prompts";
 import {
+  deleteDraft,
   listMVs,
+  loadDraft,
   loadMV,
+  newDraftId,
   newMvId,
   readCouples,
   readLibraries,
   readLibrary,
   readSettings,
+  saveDraft,
   saveMV,
   upsertLocation,
   withLock,
@@ -49,6 +55,7 @@ import { buildStructure, resolveTempo } from "./structure";
 import type {
   Character,
   CharacterBible,
+  Draft,
   IdeaRow,
   Issue,
   Libraries,
@@ -58,13 +65,35 @@ import type {
   Shot,
   Theme,
   Tone,
+  Usage,
 } from "./types";
 import { validateMV } from "./validate";
 
-export type GenMode = "claude" | "mock";
+/** claude = gọi Claude API · manual = copy/dán với claude.ai · mock = chế độ demo (mẫu có sẵn). */
+export type GenMode = "claude" | "mock" | "manual";
 
 export function generationMode(settings: Settings): GenMode {
-  return settings.mockMode || process.env.MOCK_LLM === "1" || !hasCredentials() ? "mock" : "claude";
+  if (process.env.MOCK_LLM === "1") return "mock";
+  switch (settings.engine) {
+    case "demo":
+      return "mock";
+    case "manual":
+      return "manual";
+    case "api":
+      return "claude";
+    default:
+      return hasCredentials() ? "claude" : "manual";
+  }
+}
+
+function assertCanCallApi() {
+  if (!hasCredentials()) {
+    throw new LLMError("Chưa có API key. Nhập key trong Cài đặt, hoặc chọn chế độ “claude.ai (copy – dán)” để dùng tài khoản claude.ai.", "auth");
+  }
+}
+
+function priceFor(libs: Libraries, model: string) {
+  return libs.pricing?.models?.[model];
 }
 
 const note = (severity: Issue["severity"], category: Issue["category"], message_vi: string, shot_no: number | null = null): Issue => ({
@@ -113,7 +142,7 @@ async function inferLocation(
     if (current[key]) return current[key];
     const eraYear = libs.eraRules.years[String(Math.min(1959, Math.max(1950, year)))];
     const raw =
-      mode === "mock"
+      mode !== "claude"
         ? mockLocation(key, year, eraYear)
         : (
             await callStructured({
@@ -124,6 +153,7 @@ async function inferLocation(
               validator: zLocation,
               maxTokens: 16000,
               signal,
+              price: priceFor(libs, settings.model),
             })
           ).data;
     const loc: LocationData = { region: "Tự sinh", aliases: [], ...raw, auto_generated: true };
@@ -150,11 +180,13 @@ export async function ensureSeriesCouple(
   settings: Settings,
   mode: GenMode,
   signal?: AbortSignal,
-): Promise<CharacterBible> {
+): Promise<CharacterBible | null> {
   const key = seriesKey(idea.series);
   return withLock(`couple:${key}`, async () => {
     const couples = await readCouples();
     if (couples[key]?.characters?.length) return normalizeBible(couples[key].characters);
+    // Chế độ claude.ai: cặp đôi được lấy từ MV đầu tiên của series khi hoàn tất.
+    if (mode === "manual") return null;
     const characters =
       mode === "mock"
         ? mockCouple(key)
@@ -227,6 +259,9 @@ async function buildContext(
   });
 
   const fixedBible = settings.fixedCouple ? await ensureSeriesCouple(idea, settings, opts.mode, opts.signal) : null;
+  if (settings.fixedCouple && !fixedBible) {
+    notes.push(note("info", "character", `Series “${idea.series || "mặc định"}” chưa có cặp đôi cố định — Character Bible của MV này sẽ được lưu làm cặp đôi cho cả series.`));
+  }
   const key = seriesKey(idea.series);
   const others = latestPerIdea(opts.history.filter((m) => seriesKey(m.idea.series) === key && m.idea.id !== idea.id));
   const { globalForbidden, notYetInvented } = eraForbiddenFor(libs.eraRules, year);
@@ -332,8 +367,9 @@ async function fitLengths(
   bible: CharacterBible,
   mode: GenMode,
   notes: Issue[],
-  usage: { input_tokens: number; output_tokens: number },
+  usage: Usage,
   signal?: AbortSignal,
+  libs?: Libraries,
 ): Promise<Shot[]> {
   const max = ctx.profile.max_prompt_chars;
   const over = shots.filter((s) => s.prompt_en.length > max);
@@ -351,9 +387,9 @@ async function fitLengths(
         validator: zShorten,
         maxTokens: 32000,
         signal,
+        price: libs ? priceFor(libs, ctx.settings.model) : undefined,
       });
-      usage.input_tokens += res.usage.input_tokens;
-      usage.output_tokens += res.usage.output_tokens;
+      addUsage(usage, res.usage);
       for (const r of res.data.shots) {
         const s = byNo.get(r.shot_no);
         if (!s) continue;
@@ -410,34 +446,29 @@ export interface GenerateOptions {
   signal?: AbortSignal;
 }
 
-export async function generateMV(idea: IdeaRow, opts: GenerateOptions = {}): Promise<MVResult> {
+interface Prepared {
+  settings: Settings;
+  libs: Libraries;
+  history: MVResult[];
+  mode: GenMode;
+  ctx: GenContext;
+  notes: Issue[];
+}
+
+async function prepare(idea: IdeaRow, tone: Tone, signal?: AbortSignal, modeOverride?: GenMode): Promise<Prepared> {
   const settings = await readSettings();
   const libs = await readLibraries();
-  const mode = generationMode(settings);
+  const mode = modeOverride ?? generationMode(settings);
+  if (mode === "claude") assertCanCallApi();
   const history = await listMVs();
-  const tone = opts.tone ?? "default";
-  const { ctx, notes } = await buildContext(idea, settings, libs, { tone, mode, signal: opts.signal, history });
-  const usage = { input_tokens: 0, output_tokens: 0 };
+  const { ctx, notes } = await buildContext(idea, settings, libs, { tone, mode, signal, history });
+  return { settings, libs, history, mode, ctx, notes };
+}
 
-  let raw: RawGeneration;
-  if (mode === "mock") {
-    raw = mockGenerate(ctx);
-    notes.push(note("info", "structure", "Chế độ demo: nội dung được ghép từ mẫu có sẵn, không dùng Claude. Thêm ANTHROPIC_API_KEY vào .env để sinh bằng AI."));
-  } else {
-    const expected = ctx.plan.shots.length;
-    const res = await callStructured({
-      settings,
-      system: SYSTEM_PROMPT,
-      user: buildGenerationPrompt(ctx),
-      schema: GENERATION_SCHEMA,
-      validator: zGeneration,
-      check: (d) => (d.shots.length !== expected ? `Expected exactly ${expected} shots (one per plan row), got ${d.shots.length}.` : null),
-      signal: opts.signal,
-    });
-    raw = res.data;
-    usage.input_tokens += res.usage.input_tokens;
-    usage.output_tokens += res.usage.output_tokens;
-  }
+/** Ghép kết quả thô (từ Claude API, claude.ai hoặc demo) thành MV hoàn chỉnh, kiểm tra và lưu. */
+async function finalize(prep: Prepared, raw: RawGeneration, usage: Usage, signal?: AbortSignal): Promise<MVResult> {
+  const { settings, libs, history, mode, ctx, notes } = prep;
+  const idea = ctx.idea;
 
   // Character Bible: cặp đôi cố định luôn thắng; giữ thêm nhân vật phụ nếu có.
   let bible = normalizeBible(raw.character_bible);
@@ -450,6 +481,11 @@ export async function generateMV(idea: IdeaRow, opts: GenerateOptions = {}): Pro
     notes.push(note("warning", "character", "Claude không trả về Character Bible — đã dùng cặp đôi mẫu."));
   }
 
+  const got = raw.shots.length;
+  const expected = ctx.plan.shots.length;
+  if (mode === "manual" && got !== expected) {
+    notes.push(note("warning", "structure", `Câu trả lời có ${got}/${expected} cảnh${got > expected ? " — đã bỏ các cảnh thừa" : ""}.`));
+  }
   let shots = ctx.plan.shots.map((slot, i) => {
     const r = raw.shots.find((s) => s.shot_no === slot.shot_no) ?? raw.shots[i];
     if (!r) {
@@ -458,7 +494,7 @@ export async function generateMV(idea: IdeaRow, opts: GenerateOptions = {}): Pro
     }
     return toShot(r, slot, ctx, bible);
   });
-  shots = await fitLengths(shots, ctx, bible, mode, notes, usage, opts.signal);
+  shots = await fitLengths(shots, ctx, bible, mode, notes, usage, signal, libs);
 
   const titles = raw.youtube_titles.filter(Boolean).slice(0, 3);
   const now = new Date().toISOString();
@@ -472,9 +508,9 @@ export async function generateMV(idea: IdeaRow, opts: GenerateOptions = {}): Pro
     location: ctx.location,
     theme_code: ctx.themeCode,
     theme: ctx.theme,
-    tone,
+    tone: ctx.tone,
     generator: mode,
-    model: mode === "mock" ? "demo" : settings.model,
+    model: mode === "mock" ? "demo" : mode === "manual" ? "claude.ai" : settings.model,
     video_model: ctx.profileKey,
     style_key: ctx.styleKey,
     style_text: ctx.styleText,
@@ -495,8 +531,101 @@ export async function generateMV(idea: IdeaRow, opts: GenerateOptions = {}): Pro
   };
   mv = finalizeIssues(mv, settings, libs, history);
   await saveMV(mv);
+
+  // claude.ai: series chưa có cặp đôi cố định → lấy cặp đôi của MV này.
+  if (settings.fixedCouple && !ctx.fixedBible) {
+    const key = seriesKey(idea.series);
+    await withLock(`couple:${key}`, async () => {
+      const couples = await readCouples();
+      if (!couples[key]?.characters?.length) {
+        await writeCouples({ ...couples, [key]: { characters: bible.characters.slice(0, 2), created_at: now } });
+      }
+    });
+  }
   return mv;
 }
+
+/** Sinh một MV bằng Claude API hoặc chế độ demo. (Chế độ claude.ai dùng createDrafts.) */
+export async function generateMV(idea: IdeaRow, opts: GenerateOptions = {}): Promise<MVResult> {
+  const prep = await prepare(idea, opts.tone ?? "default", opts.signal);
+  if (prep.mode === "manual") throw new Error("Đang ở chế độ claude.ai — hãy tạo bản nháp (createDrafts) thay vì gọi API.");
+  const usage = emptyUsage();
+
+  let raw: RawGeneration;
+  if (prep.mode === "mock") {
+    raw = mockGenerate(prep.ctx);
+    prep.notes.push(note("info", "structure", "Chế độ demo: nội dung được ghép từ mẫu có sẵn, không dùng Claude. Nhập API key hoặc dùng chế độ claude.ai để sinh bằng AI."));
+  } else {
+    const expected = prep.ctx.plan.shots.length;
+    const res = await callStructured({
+      settings: prep.settings,
+      system: SYSTEM_PROMPT,
+      user: buildGenerationPrompt(prep.ctx),
+      schema: GENERATION_SCHEMA,
+      validator: zGeneration,
+      check: (d) => (d.shots.length !== expected ? `Expected exactly ${expected} shots (one per plan row), got ${d.shots.length}.` : null),
+      signal: opts.signal,
+      price: priceFor(prep.libs, prep.settings.model),
+    });
+    raw = res.data;
+    addUsage(usage, res.usage);
+  }
+  return finalize(prep, raw, usage, opts.signal);
+}
+
+// ---------- Chế độ claude.ai (copy yêu cầu → dán câu trả lời) ----------
+
+export async function createDrafts(ideas: IdeaRow[], tone: Tone = "default"): Promise<Draft[]> {
+  const out: Draft[] = [];
+  for (const idea of ideas) {
+    const draft: Draft = { id: newDraftId(), created_at: new Date(Date.now() + out.length).toISOString(), idea, tone };
+    await saveDraft(draft);
+    out.push(draft);
+  }
+  return out;
+}
+
+async function loadDraftOrThrow(id: string): Promise<Draft> {
+  const d = await loadDraft(id);
+  if (!d) throw new Error("Không tìm thấy bản nháp.");
+  return d;
+}
+
+/**
+ * Tạo yêu cầu (một tin nhắn) để dán vào claude.ai. Ngữ cảnh được lưu vào bản nháp để câu trả lời
+ * được ghép đúng theo kế hoạch cảnh đã gửi (kể cả khi đổi cài đặt sau đó).
+ */
+export async function buildDraftPrompt(id: string): Promise<{ prompt: string; draft: Draft }> {
+  const draft = await loadDraftOrThrow(id);
+  const prep = await prepare(draft.idea, draft.tone, undefined, "manual");
+  const expected = prep.ctx.plan.shots.length;
+  const prompt = manualPrompt(SYSTEM_PROMPT, buildGenerationPrompt(prep.ctx), GENERATION_SCHEMA, [
+    `Include all ${expected} shots, in order. Do not shorten or skip any field.`,
+  ]);
+  const updated: Draft = { ...draft, ctx: prep.ctx, notes: prep.notes, prompt_built_at: new Date().toISOString(), prompt_chars: prompt.length };
+  await saveDraft(updated);
+  return { prompt, draft: updated };
+}
+
+/** Nhận câu trả lời của claude.ai (văn bản dán vào) → MV hoàn chỉnh; xoá bản nháp. */
+export async function completeDraft(id: string, answer: string): Promise<MVResult> {
+  const draft = await loadDraftOrThrow(id);
+  if (!draft.ctx) throw new Error("Hãy bấm “Copy yêu cầu” và gửi cho Claude trước, rồi mới dán câu trả lời.");
+  const raw = parseAnswer(answer, zGenerationLoose) as RawGeneration;
+  const prep: Prepared = {
+    settings: await readSettings(),
+    libs: await readLibraries(),
+    history: await listMVs(),
+    mode: "manual",
+    ctx: draft.ctx as GenContext,
+    notes: [...(draft.notes ?? []), note("info", "structure", "Nội dung tạo bằng claude.ai (copy – dán), không tốn phí API.")],
+  };
+  const mv = await finalize(prep, raw, emptyUsage());
+  await deleteDraft(id);
+  return mv;
+}
+
+// ---------- Sinh lại một cảnh ----------
 
 async function loadOrThrow(id: string): Promise<MVResult> {
   const mv = await loadMV(id);
@@ -504,47 +633,77 @@ async function loadOrThrow(id: string): Promise<MVResult> {
   return mv;
 }
 
-export async function regenerateShot(id: string, shotNo: number, instruction: string, signal?: AbortSignal): Promise<MVResult> {
+async function shotContext(id: string, shotNo: number) {
   const mv = await loadOrThrow(id);
   const settings = await readSettings();
   const libs = await readLibraries();
   const history = await listMVs();
-  const mode = generationMode(settings);
   const idx = mv.shots.findIndex((s) => s.shot_no === shotNo);
   if (idx === -1) throw new Error(`Không có cảnh #${shotNo}.`);
-  const slot = mv.structure.shots[idx];
   const ctx = await contextFromMV(mv, settings, libs, history);
-  const usage = mv.usage ?? { input_tokens: 0, output_tokens: 0 };
+  return { mv, settings, libs, history, idx, slot: mv.structure.shots[idx], ctx };
+}
 
-  let raw: RawShot;
-  if (mode === "mock") {
-    // Thử vài biến thể cho tới khi khác cảnh hiện tại.
-    const base = (Date.now() % 997) + 1;
-    raw = mockShot(ctx, slot, base);
-    for (let k = 1; k < 12 && cleanCore(raw.prompt_core, ctx, mv.character_bible) === mv.shots[idx].prompt_core; k++) {
-      raw = mockShot(ctx, slot, base + k);
-    }
-  } else {
-    const res = await callStructured({
-      settings,
-      system: SYSTEM_PROMPT,
-      user: buildShotRegenPrompt(ctx, mv, shotNo, instruction),
-      schema: SHOT_REGEN_SCHEMA,
-      validator: zShotRegen,
-      maxTokens: 32000,
-      signal,
-    });
-    raw = res.data.shot;
-    usage.input_tokens += res.usage.input_tokens;
-    usage.output_tokens += res.usage.output_tokens;
-  }
-  const notes = mv.generation_notes.filter((n) => n.shot_no !== shotNo);
-  let [shot] = await fitLengths([toShot(raw, slot, ctx, mv.character_bible)], ctx, mv.character_bible, mode, notes, usage, signal);
+async function applyRawShot(
+  sc: Awaited<ReturnType<typeof shotContext>>,
+  raw: RawShot,
+  mode: GenMode,
+  usage: Usage,
+  signal?: AbortSignal,
+): Promise<MVResult> {
+  const { mv, idx, slot, ctx, settings, libs, history } = sc;
+  const notes = mv.generation_notes.filter((n) => n.shot_no !== slot.shot_no);
+  let [shot] = await fitLengths([toShot(raw, slot, ctx, mv.character_bible)], ctx, mv.character_bible, mode, notes, usage, signal, libs);
   shot = { ...shot, edited: false };
   const shots = mv.shots.map((s, i) => (i === idx ? shot : s));
   const updated = finalizeIssues({ ...mv, shots, generation_notes: notes, usage, updated_at: new Date().toISOString() }, settings, libs, history);
   await saveMV(updated);
   return updated;
+}
+
+export async function regenerateShot(id: string, shotNo: number, instruction: string, signal?: AbortSignal): Promise<MVResult> {
+  const sc = await shotContext(id, shotNo);
+  const mode = generationMode(sc.settings);
+  if (mode === "manual") throw new Error("Đang ở chế độ claude.ai — hãy copy yêu cầu sinh lại cảnh và dán câu trả lời.");
+  const usage = { ...emptyUsage(), ...(sc.mv.usage ?? {}) };
+
+  let raw: RawShot;
+  if (mode === "mock") {
+    // Thử vài biến thể cho tới khi khác cảnh hiện tại.
+    const base = (Date.now() % 997) + 1;
+    raw = mockShot(sc.ctx, sc.slot, base);
+    for (let k = 1; k < 12 && cleanCore(raw.prompt_core, sc.ctx, sc.mv.character_bible) === sc.mv.shots[sc.idx].prompt_core; k++) {
+      raw = mockShot(sc.ctx, sc.slot, base + k);
+    }
+  } else {
+    assertCanCallApi();
+    const res = await callStructured({
+      settings: sc.settings,
+      system: SYSTEM_PROMPT,
+      user: buildShotRegenPrompt(sc.ctx, sc.mv, shotNo, instruction),
+      schema: SHOT_REGEN_SCHEMA,
+      validator: zShotRegen,
+      maxTokens: 32000,
+      signal,
+      price: priceFor(sc.libs, sc.settings.model),
+    });
+    raw = res.data.shot;
+    addUsage(usage, res.usage);
+  }
+  return applyRawShot(sc, raw, mode, usage, signal);
+}
+
+/** Chế độ claude.ai: yêu cầu sinh lại một cảnh (để copy). */
+export async function shotRegenManualPrompt(id: string, shotNo: number, instruction: string): Promise<string> {
+  const sc = await shotContext(id, shotNo);
+  return manualPrompt(SYSTEM_PROMPT, buildShotRegenPrompt(sc.ctx, sc.mv, shotNo, instruction), SHOT_REGEN_SCHEMA, [`Keep "shot_no": ${shotNo}.`]);
+}
+
+/** Chế độ claude.ai: dán câu trả lời sinh lại cảnh. */
+export async function applyShotAnswer(id: string, shotNo: number, answer: string): Promise<MVResult> {
+  const sc = await shotContext(id, shotNo);
+  const raw = parseAnswer(answer, zShotAnswerLoose) as RawShot;
+  return applyRawShot(sc, { ...raw, shot_no: shotNo }, "manual", { ...emptyUsage(), ...(sc.mv.usage ?? {}) });
 }
 
 export type ShotPatch = Partial<

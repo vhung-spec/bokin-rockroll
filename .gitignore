@@ -14,6 +14,7 @@ next-env.d.ts
 # dữ liệu người dùng sinh ra khi chạy
 data/history/
 data/uploads/
+data/drafts/
 
 # misc
 .DS_Store

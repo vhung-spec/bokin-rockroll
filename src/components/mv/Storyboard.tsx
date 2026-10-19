@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CopyButton, ErrorBox, Field, Modal, Spinner } from "@/components/ui";
-import { api } from "@/lib/client";
+import { api, copyText } from "@/lib/client";
 import { formatTime } from "@/lib/structure";
 import type { Issue, MVResult, Shot } from "@/lib/types";
 
@@ -14,9 +14,11 @@ interface Props {
   mv: MVResult;
   maxChars: number;
   onUpdated: (mv: MVResult) => void;
+  /** Chế độ claude.ai: sinh lại cảnh bằng copy – dán. */
+  manual?: boolean;
 }
 
-export default function Storyboard({ mv, maxChars, onUpdated }: Props) {
+export default function Storyboard({ mv, maxChars, onUpdated, manual }: Props) {
   const [editing, setEditing] = useState<Shot | null>(null);
   const [regen, setRegen] = useState<Shot | null>(null);
   const [busyShot, setBusyShot] = useState<number | null>(null);
@@ -108,7 +110,18 @@ export default function Storyboard({ mv, maxChars, onUpdated }: Props) {
         </table>
       </div>
 
-      {regen && <RegenModal shot={regen} onClose={() => setRegen(null)} onSubmit={(text) => regenerate(regen.shot_no, text)} />}
+      {regen && !manual && <RegenModal shot={regen} onClose={() => setRegen(null)} onSubmit={(text) => regenerate(regen.shot_no, text)} />}
+      {regen && manual && (
+        <ManualRegenModal
+          mvId={mv.id}
+          shot={regen}
+          onClose={() => setRegen(null)}
+          onDone={(updated) => {
+            onUpdated(updated);
+            setRegen(null);
+          }}
+        />
+      )}
       {editing && (
         <ShotEditor
           mv={mv}
@@ -158,6 +171,80 @@ function RegenModal({ shot, onClose, onSubmit }: { shot: Shot; onClose: () => vo
         </button>
         <button className="btn-primary" onClick={() => onSubmit(text.trim())}>
           ↻ Sinh lại
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function ManualRegenModal({ mvId, shot, onClose, onDone }: { mvId: string; shot: Shot; onClose: () => void; onDone: (mv: MVResult) => void }) {
+  const [text, setText] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [copied, setCopied] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function copyPrompt() {
+    setError(null);
+    try {
+      const res = await api<{ prompt: string; chars: number }>(`/api/mv/${mvId}/shot`, {
+        method: "POST",
+        json: { shot_no: shot.shot_no, instruction: text.trim(), manual: "prompt" },
+      });
+      if (await copyText(res.prompt)) setCopied(res.chars);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function apply() {
+    setBusy(true);
+    setError(null);
+    try {
+      onDone(await api<MVResult>(`/api/mv/${mvId}/shot`, { method: "POST", json: { shot_no: shot.shot_no, answer } }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open title={`Sinh lại cảnh #${shot.shot_no} bằng claude.ai`} onClose={onClose}>
+      <p className="mb-2 text-sm text-muted">Hiện tại: {shot.description_vi}</p>
+      <Field label="1. Yêu cầu thêm (không bắt buộc)">
+        <textarea className="input min-h-16" value={text} onChange={(e) => setText(e.target.value)} placeholder="Ví dụ: góc máy thấp, trong xe mui trần" />
+      </Field>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {QUICK_REQUESTS.map((q) => (
+          <button key={q} className="badge hover:bg-cream-dark" onClick={() => setText((t) => (t ? `${t}; ${q.toLowerCase()}` : q))}>
+            {q}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button className="btn-mint" onClick={copyPrompt}>
+          2. Copy yêu cầu
+        </button>
+        <a className="btn-ghost" href="https://claude.ai/new" target="_blank" rel="noreferrer">
+          Mở claude.ai ↗
+        </a>
+        {copied && <span className="text-sm text-mint-dark">✓ Đã copy {copied.toLocaleString("vi-VN")} ký tự — dán vào cuộc trò chuyện mới</span>}
+      </div>
+      <div className="mt-3">
+        <Field label="3. Dán câu trả lời của Claude">
+          <textarea className="input prompt-text min-h-32" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="```json { ... } ```" />
+        </Field>
+      </div>
+      <div className="mt-2">
+        <ErrorBox error={error} />
+      </div>
+      <div className="mt-3 flex justify-end gap-2">
+        <button className="btn-ghost" onClick={onClose}>
+          Huỷ
+        </button>
+        <button className="btn-primary" disabled={busy || !answer.trim()} onClick={apply}>
+          {busy && <Spinner />} Áp dụng cảnh mới
         </button>
       </div>
     </Modal>

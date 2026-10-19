@@ -7,10 +7,12 @@ import { Card, ErrorBox, IssueBadge, Spinner } from "@/components/ui";
 import type { BatchItem } from "@/lib/batch";
 import { batchEngine } from "@/lib/batchEngine";
 import { api, copyText, exportUrl } from "@/lib/client";
+import { formatMoney } from "@/lib/cost";
 
 interface Status {
-  mode: "claude" | "mock";
+  mode: "claude" | "mock" | "manual";
   concurrency: number;
+  usdToVnd: number;
 }
 
 const STATUS_LABEL: Record<BatchItem["status"], string> = {
@@ -130,7 +132,7 @@ function BatchRunner() {
         <div>
           <h1 className="text-3xl uppercase">Chạy batch</h1>
           <p className="text-sm text-muted">
-            {total} MV · song song tối đa {status?.concurrency ?? "…"} · {status?.mode === "mock" ? "chế độ demo" : "Claude API"} · giọng: {{ default: "mặc định", playful: "vui tươi", melancholy: "buồn", cinematic: "điện ảnh" }[batch.tone]}
+            {total} MV · song song tối đa {status?.concurrency ?? "…"} · {status ? { mock: "chế độ demo", manual: "claude.ai", claude: "Claude API" }[status.mode] : "…"} · giọng: {{ default: "mặc định", playful: "vui tươi", melancholy: "buồn", cinematic: "điện ảnh" }[batch.tone]}
           </p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
@@ -165,6 +167,11 @@ function BatchRunner() {
           <span className="text-muted">
             Xong {done.length} · Lỗi {failed.length} · Đang chạy {inflight.length} · Chờ {pending.length}
           </span>
+          {done.some((i) => i.cost_usd) && (
+            <span className="ml-auto font-semibold">
+              Chi phí Claude API: {formatMoney(done.reduce((a, i) => a + (i.cost_usd ?? 0), 0), status?.usdToVnd ?? 26000)}
+            </span>
+          )}
           {running && <Spinner />}
         </div>
         <div className="h-4 overflow-hidden rounded-full border-2 border-ink bg-cream">
@@ -243,7 +250,13 @@ function BatchRunner() {
                         </Link>
                         <IssueBadge severity="error" count={item.errors ?? 0} />
                         <IssueBadge severity="warning" count={item.warnings ?? 0} />
+                        {item.cost_usd ? <span className="text-xs text-muted">{formatMoney(item.cost_usd, status?.usdToVnd ?? 26000)}</span> : null}
                       </div>
+                    )}
+                    {item.status === "done" && item.draft && (
+                      <Link href="/manual" className="btn-mint btn-sm">
+                        Làm tiếp ở trang claude.ai →
+                      </Link>
                     )}
                     {item.status === "error" && (
                       <div className="space-y-1">

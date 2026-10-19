@@ -109,16 +109,16 @@ export function validateMV(mv: MVResult, ctx: ValidateContext): Issue[] {
 
   // Không lặp lại một cảnh nhiều lần.
   const toks = mv.shots.map((s) => tokens(s.prompt_core));
-  for (let i = 0; i < mv.shots.length; i++) {
-    for (let j = i + 1; j < mv.shots.length; j++) {
-      if (jaccard(toks[i], toks[j]) >= 0.7) {
-        issues.push({
-          shot_no: mv.shots[j].shot_no,
-          severity: "warning",
-          category: "duplicate",
-          message_vi: `Cảnh #${mv.shots[j].shot_no} gần giống cảnh #${mv.shots[i].shot_no} — nên đổi hành động hoặc góc máy.`,
-        });
-      }
+  // Mỗi cảnh chỉ báo một lần (so với cảnh giống nó sớm nhất).
+  for (let j = 1; j < mv.shots.length; j++) {
+    const i = toks.slice(0, j).findIndex((t) => jaccard(t, toks[j]) >= 0.7);
+    if (i >= 0) {
+      issues.push({
+        shot_no: mv.shots[j].shot_no,
+        severity: "warning",
+        category: "duplicate",
+        message_vi: `Cảnh #${mv.shots[j].shot_no} gần giống cảnh #${mv.shots[i].shot_no} — nên đổi hành động hoặc góc máy.`,
+      });
     }
   }
 

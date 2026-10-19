@@ -17,6 +17,10 @@ export interface BatchItem {
   finished_at?: number;
   /** Mã lượt chạy hiện tại (bỏ qua kết quả của lượt cũ đã huỷ). */
   run?: string;
+  /** Chi phí Claude API của MV này (USD). */
+  cost_usd?: number;
+  /** Ở chế độ claude.ai, MV được chuyển thành bản nháp chờ copy – dán. */
+  draft?: boolean;
 }
 
 export interface Batch {

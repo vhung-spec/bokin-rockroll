@@ -35,7 +35,7 @@ export const zSettings = z.object({
   concurrency: z.number().int().min(1).max(8),
   allowVehicleMakes: z.boolean(),
   channelVoice: z.string(),
-  mockMode: z.boolean(),
+  engine: z.enum(["auto", "api", "manual", "demo"]),
   songStructure: z
     .array(z.object({ name: z.string().min(1), ratio: z.number().min(0), role_vi: z.string(), role_en: z.string() }))
     .min(1),
@@ -115,12 +115,21 @@ export const zEraRules = z.looseObject({
   ),
 });
 
+const price = z.number().min(0);
+export const zPricing = z.looseObject({
+  usd_to_vnd: z.number().min(1),
+  updated: z.string().optional(),
+  note: z.string().optional(),
+  models: z.record(z.string().min(1), z.object({ input: price, output: price, cache_write: price, cache_read: price })),
+});
+
 export const LIBRARY_SCHEMAS = {
   themes: zThemes,
   locations: zLocations,
   eraRules: zEraRules,
   styles: zStyles,
   videoModels: zVideoModels,
+  pricing: zPricing,
 } as const;
 
 /** Kiểm tra regex trong era rules / locations có biên dịch được không. */

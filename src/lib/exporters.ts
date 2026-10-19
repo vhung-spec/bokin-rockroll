@@ -92,6 +92,7 @@ export function toMarkdown(mvs: MVResult[]): string {
     if (mv.idea.series) out.push(`- **Series:** ${mv.idea.series}`);
     out.push(`- **Khung sườn:** ${mv.idea.outline}`);
     out.push(`- **Công cụ video:** ${mv.video_model} · ${mv.structure.total_shots} cảnh · clip ${mv.structure.clip_len}s`);
+    if (mv.generator === "claude") out.push(`- **Chi phí Claude API:** $${(mv.usage?.cost_usd ?? 0).toFixed(4)}`);
     out.push("");
     out.push("## Character Bible");
     for (const c of mv.character_bible.characters) out.push(`- **${c.id}** (${c.role}): ${c.description}`);

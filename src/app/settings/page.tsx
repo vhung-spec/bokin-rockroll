@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ApiKeyCard from "@/components/settings/ApiKeyCard";
+import EngineCard from "@/components/settings/EngineCard";
+import PricingCard from "@/components/settings/PricingCard";
 import { Card, ErrorBox, Field, Spinner } from "@/components/ui";
 import { api } from "@/lib/client";
-import type { Character, Settings, StyleLibrary, VideoModelLibrary } from "@/lib/types";
+import type { Character, Pricing, Settings, StyleLibrary, VideoModelLibrary } from "@/lib/types";
 
 type Couples = Record<string, { characters: Character[]; created_at: string }>;
 
 interface Status {
   hasKey: boolean;
-  mode: "claude" | "mock";
+  mode: "claude" | "mock" | "manual";
 }
 
 const MODEL_SUGGESTIONS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"];
@@ -19,6 +22,7 @@ export default function SettingsPage() {
   const [styles, setStyles] = useState<StyleLibrary>({});
   const [models, setModels] = useState<VideoModelLibrary>({});
   const [couples, setCouples] = useState<Couples>({});
+  const [pricing, setPricing] = useState<Pricing | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -29,6 +33,7 @@ export default function SettingsPage() {
     api<StyleLibrary>("/api/library/styles").then(setStyles).catch(() => {});
     api<VideoModelLibrary>("/api/library/videoModels").then(setModels).catch(() => {});
     api<Couples>("/api/couples").then(setCouples).catch(() => {});
+    api<Pricing>("/api/library/pricing").then(setPricing).catch(() => {});
     api<Status>("/api/status").then(setStatus).catch(() => {});
   }, []);
 
@@ -51,6 +56,7 @@ export default function SettingsPage() {
     try {
       setS(await api<Settings>("/api/settings", { method: "PUT", json: s }));
       await api("/api/couples", { method: "PUT", json: couples });
+      if (pricing) setPricing(await api<Pricing>("/api/library/pricing", { method: "PUT", json: pricing }));
       setSaved("Đã lưu cài đặt.");
       setTimeout(() => setSaved(null), 2500);
       api<Status>("/api/status").then(setStatus).catch(() => {});
@@ -84,17 +90,9 @@ export default function SettingsPage() {
       <ErrorBox error={error} />
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card title="Claude (LLM)">
-          <div className="mb-3 rounded-lg border border-ink/20 bg-cream/60 p-3 text-sm">
-            {status?.hasKey ? (
-              <span className="text-mint-dark">✓ Đã tìm thấy ANTHROPIC_API_KEY trong môi trường.</span>
-            ) : (
-              <span className="text-amber-800">
-                Chưa có ANTHROPIC_API_KEY — công cụ đang chạy <b>chế độ demo</b>. Tạo file <code>.env</code> ở thư mục dự án với dòng{" "}
-                <code>ANTHROPIC_API_KEY=sk-ant-…</code> rồi khởi động lại.
-              </span>
-            )}
-          </div>
+        <EngineCard engine={s.engine} hasKey={Boolean(status?.hasKey)} onChange={(e) => set("engine", e)} />
+        <ApiKeyCard onChanged={() => api<Status>("/api/status").then(setStatus).catch(() => {})} />
+        <Card title="Claude API — model">
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Model" hint="Mặc định claude-sonnet-5-5.">
               <input className="input" list="model-suggestions" value={s.model} onChange={(e) => set("model", e.target.value)} />
@@ -116,19 +114,14 @@ export default function SettingsPage() {
             <Field label="Số MV chạy song song" hint="Giảm nếu gặp lỗi rate limit.">
               <input className="input" type="number" min={1} max={8} value={s.concurrency} onChange={(e) => set("concurrency", Number(e.target.value))} />
             </Field>
-            <div className="space-y-2 pt-5">
+            <div className="pt-5">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={s.useFallback} onChange={(e) => set("useFallback", e.target.checked)} />
                 Tự chuyển model dự phòng khi bị từ chối (server-side fallback)
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={s.mockMode} onChange={(e) => set("mockMode", e.target.checked)} />
-                Chế độ demo (không gọi API, dùng mẫu)
-              </label>
             </div>
           </div>
         </Card>
-
         <Card title="Công cụ video & storyboard">
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Công cụ tạo video">
@@ -285,6 +278,8 @@ export default function SettingsPage() {
             ＋ Thêm đoạn
           </button>
         </Card>
+
+        {pricing && <PricingCard pricing={pricing} onChange={setPricing} model={s.model} effort={s.effort} shots={s.maxShots} />}
 
         <Card title="Giọng văn kênh (mô tả YouTube)" className="lg:col-span-2">
           <textarea className="input min-h-20" value={s.channelVoice} onChange={(e) => set("channelVoice", e.target.value)} />

@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CopyButton, ErrorBox, IssueBadge, Spinner } from "@/components/ui";
 import { api, exportUrl } from "@/lib/client";
+import { formatMoney } from "@/lib/cost";
 import type { MVSummary } from "@/lib/types";
+import { useStatus } from "@/lib/useStatus";
 
 const FORMATS = [
   ["xlsx", "XLSX"],
@@ -33,6 +35,9 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [promptsText, setPromptsText] = useState<string>("");
+  const { status } = useStatus();
+  const rate = status?.usdToVnd ?? 26000;
+  const costOf = (list: MVSummary[]) => list.reduce((a, i) => a + (i.cost_usd ?? 0), 0);
 
   const load = () =>
     api<MVSummary[]>("/api/mv")
@@ -141,7 +146,12 @@ export default function HistoryPage() {
         </div>
         {ids.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ink/15 pt-3">
-            <span className="text-sm font-semibold">Đã chọn {ids.length} MV — xuất:</span>
+            <span className="text-sm font-semibold">
+              Đã chọn {ids.length} MV
+              {costOf((items ?? []).filter((i) => selected.has(i.id))) > 0 &&
+                ` · chi phí ${formatMoney(costOf((items ?? []).filter((i) => selected.has(i.id))), rate)}`}{" "}
+              — xuất:
+            </span>
             {FORMATS.map(([f, label]) => (
               <a key={f} className={f === "xlsx" ? "btn-primary btn-sm" : "btn-ghost btn-sm"} href={exportUrl(f, { ids })}>
                 {label}
@@ -168,7 +178,14 @@ export default function HistoryPage() {
       {groups.map(([name, list]) => (
         <Card
           key={name || "__none"}
-          title={name || "Không có series"}
+          title={
+            <>
+              {name || "Không có series"}
+              <span className="ml-2 text-xs font-normal normal-case text-muted">
+                {list.length} MV{costOf(list) > 0 && ` · chi phí API ${formatMoney(costOf(list), rate)}`}
+              </span>
+            </>
+          }
           actions={
             <>
               <button
@@ -217,6 +234,8 @@ export default function HistoryPage() {
                         <IssueBadge severity="error" count={i.error_count} />
                         <IssueBadge severity="warning" count={i.warning_count} />
                         {i.generator === "mock" && <span className="badge border-amber-500 bg-amber-100">demo</span>}
+                        {i.generator === "manual" && <span className="badge border-sky-400 bg-sky-50">claude.ai</span>}
+                        {i.cost_usd > 0 && <span className="badge">{formatMoney(i.cost_usd, rate)}</span>}
                       </div>
                     </td>
                     <td className="p-2 text-xs text-muted">{new Date(i.created_at).toLocaleString("vi-VN")}</td>

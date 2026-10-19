@@ -8,8 +8,10 @@ import Storyboard from "@/components/mv/Storyboard";
 import { Card, CopyButton, ErrorBox, IssueBadge, IssueList, Spinner } from "@/components/ui";
 import { api, exportUrl } from "@/lib/client";
 import { allPrompts } from "@/lib/exporters";
+import { formatMoney } from "@/lib/cost";
 import { formatTime } from "@/lib/structure";
 import type { MVResult, StyleLibrary, Tone, VideoModelLibrary } from "@/lib/types";
+import { useStatus } from "@/lib/useStatus";
 
 const TONES: { value: Tone; label: string }[] = [
   { value: "playful", label: "Vui tươi hơn" },
@@ -28,6 +30,8 @@ export default function MVPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [tone, setTone] = useState<Tone>("playful");
+  const { status } = useStatus();
+  const rate = status?.usdToVnd ?? 26000;
 
   useEffect(() => {
     api<MVResult>(`/api/mv/${id}`).then(setMv).catch((e) => setError(e.message));
@@ -80,8 +84,8 @@ export default function MVPage() {
     setBusy("tone");
     setError(null);
     try {
-      const fresh = await api<MVResult>("/api/generate", { method: "POST", json: { idea: mv!.idea, tone } });
-      router.push(`/mv/${fresh.id}`);
+      const fresh = await api<MVResult | { kind: "draft" }>("/api/generate", { method: "POST", json: { idea: mv!.idea, tone } });
+      router.push("kind" in fresh ? "/manual" : `/mv/${fresh.id}`);
     } catch (e) {
       setError((e as Error).message);
       setBusy(null);
@@ -123,8 +127,15 @@ export default function MVPage() {
             {mv.tone !== "default" && <span className="badge">giọng {TONE_LABEL[mv.tone]}</span>}
             {mv.generator === "mock" ? (
               <span className="badge border-amber-500 bg-amber-100">chế độ demo</span>
+            ) : mv.generator === "manual" ? (
+              <span className="badge border-sky-400 bg-sky-50">claude.ai · không tốn phí API</span>
             ) : (
               <span className="badge">{mv.model}</span>
+            )}
+            {mv.generator === "claude" && (
+              <span className="badge border-mint-dark/50 bg-mint/30 font-semibold" title="Tổng chi phí Claude API của MV này (gồm cả các lần sinh lại cảnh)">
+                💵 {formatMoney(mv.usage?.cost_usd ?? 0, rate)}
+              </span>
             )}
             <IssueBadge severity="error" count={errors} />
             <IssueBadge severity="warning" count={warnings} />
@@ -204,7 +215,7 @@ export default function MVPage() {
         title={`Storyboard — ${mv.shots.length} cảnh`}
         actions={<CopyButton text={allPrompts([mv])} label="Copy tất cả prompt (mỗi dòng 1 prompt)" className="btn-mint btn-sm" />}
       >
-        <Storyboard mv={mv} maxChars={maxChars} onUpdated={setMv} />
+        <Storyboard mv={mv} maxChars={maxChars} onUpdated={setMv} manual={status?.mode === "manual"} />
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -274,7 +285,11 @@ export default function MVPage() {
       )}
       {mv.usage && mv.generator === "claude" && (
         <p className="text-right text-xs text-muted">
-          Token: {mv.usage.input_tokens.toLocaleString()} vào · {mv.usage.output_tokens.toLocaleString()} ra
+          {mv.usage.requests ?? 0} lần gọi API · Token: {mv.usage.input_tokens.toLocaleString("vi-VN")} vào
+          {(mv.usage.cache_read_input_tokens ?? 0) + (mv.usage.cache_creation_input_tokens ?? 0) > 0 &&
+            ` (+ ${((mv.usage.cache_read_input_tokens ?? 0) + (mv.usage.cache_creation_input_tokens ?? 0)).toLocaleString("vi-VN")} cache)`}{" "}
+          · {mv.usage.output_tokens.toLocaleString("vi-VN")} ra · Chi phí: {formatMoney(mv.usage.cost_usd ?? 0, rate)}
+          {mv.usage.cost_unknown && " (chưa tính được một phần — model không có trong bảng giá)"}
         </p>
       )}
     </div>
