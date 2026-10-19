@@ -12,7 +12,8 @@ const FORMATS = [
   ["md", "MD"],
   ["txt", "TXT"],
   ["json", "JSON"],
-  ["prompts", "Prompt (TXT)"],
+  ["prompts-spaced", "File prompt (cách 1 dòng)"],
+  ["prompts", "Prompt (mỗi dòng 1)"],
 ] as const;
 
 function norm(s: string) {
@@ -185,6 +186,9 @@ export default function HistoryPage() {
               </button>
               <a className="btn-primary btn-sm" href={exportUrl("xlsx", { series: name })} title="Bản mới nhất của mỗi bài, mỗi MV một sheet">
                 XLSX cả series
+              </a>
+              <a className="btn-mint btn-sm" href={exportUrl("prompts-spaced", { series: name })} title="Tất cả prompt của series, mỗi prompt cách nhau một dòng trống">
+                File prompt cả series
               </a>
             </>
           }

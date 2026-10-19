@@ -67,8 +67,10 @@ export function toCsv(mvs: MVResult[]): string {
   return "﻿" + Papa.unparse({ fields: [...fields], data: rows.map((r) => fields.map((f) => (r as Record<string, unknown>)[f] ?? "")) });
 }
 
-export function allPrompts(mvs: MVResult[]): string {
-  return mvs.flatMap((mv) => mv.shots.map((s) => s.prompt_en.replace(/\s*\n\s*/g, " "))).join("\n");
+/** Tất cả prompt, theo thứ tự MV → cảnh. Mặc định mỗi dòng một prompt; `blankLine` = cách nhau một dòng trống. */
+export function allPrompts(mvs: MVResult[], opts: { blankLine?: boolean } = {}): string {
+  const prompts = mvs.flatMap((mv) => mv.shots.map((s) => s.prompt_en.replace(/\s*\n\s*/g, " ").trim()));
+  return prompts.join(opts.blankLine ? "\n\n" : "\n") + (opts.blankLine ? "\n" : "");
 }
 
 export function bibleText(mv: MVResult): string {

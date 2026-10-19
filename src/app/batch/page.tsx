@@ -190,6 +190,9 @@ function BatchRunner() {
             <a className="btn-ghost" href={exportUrl("json", { ids: doneIds })}>
               JSON
             </a>
+            <a className="btn-mint" href={exportUrl("prompts-spaced", { ids: doneIds })} title="File .txt chỉ gồm các prompt, mỗi prompt cách nhau một dòng trống">
+              File prompt (.txt, cách 1 dòng)
+            </a>
             <button className="btn-mint" onClick={copyAll}>
               Copy tất cả prompt
             </button>

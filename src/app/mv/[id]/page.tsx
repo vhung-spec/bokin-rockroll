@@ -148,6 +148,9 @@ export default function MVPage() {
             <a className="btn-ghost btn-sm" href={exportUrl("json", { ids: [mv.id] })}>
               JSON
             </a>
+            <a className="btn-mint btn-sm" href={exportUrl("prompts-spaced", { ids: [mv.id] })} title="File .txt chỉ gồm các prompt, mỗi prompt cách nhau một dòng trống">
+              File prompt (.txt)
+            </a>
             <CopyButton text={allPrompts([mv])} label="Copy tất cả prompt" className="btn-mint btn-sm" />
           </div>
           <div className="flex flex-wrap justify-end gap-2">

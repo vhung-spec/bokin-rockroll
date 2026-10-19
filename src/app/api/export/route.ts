@@ -13,6 +13,8 @@ const FORMATS = {
   txt: { ext: "txt", type: "text/plain; charset=utf-8" },
   json: { ext: "json", type: "application/json; charset=utf-8" },
   prompts: { ext: "txt", type: "text/plain; charset=utf-8" },
+  // Mỗi prompt cách nhau một dòng trống — để nhập hàng loạt vào công cụ tạo video.
+  "prompts-spaced": { ext: "txt", type: "text/plain; charset=utf-8" },
 } as const;
 type Format = keyof typeof FORMATS;
 
@@ -62,9 +64,12 @@ export async function GET(req: Request) {
       case "prompts":
         body = allPrompts(mvs);
         break;
+      case "prompts-spaced":
+        body = allPrompts(mvs, { blankLine: true });
+        break;
     }
     const { ext, type } = FORMATS[format];
-    const filename = `${exportFileBase(mvs)}${format === "prompts" ? "-prompts" : ""}.${ext}`;
+    const filename = `${exportFileBase(mvs)}${format === "prompts" || format === "prompts-spaced" ? "-prompts" : ""}.${ext}`;
     return new Response(new Uint8Array(typeof body === "string" ? Buffer.from(body, "utf8") : body), {
       headers: {
         "Content-Type": type,
