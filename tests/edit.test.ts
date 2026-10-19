@@ -96,7 +96,7 @@ function makeInput(over: Partial<Omit<EditInput, "options">> & { options?: Parti
     audioDuration: 187.3,
     beat: null,
     ...rest,
-    options: { ...DEFAULT_EDIT_OPTIONS, ...options },
+    options: { ...DEFAULT_EDIT_OPTIONS, mode: "beat", ...options },
   };
 }
 
@@ -195,5 +195,67 @@ describe("buildEdit", () => {
     const plan = buildEdit(makeInput({ clips: {} }));
     expect(plan.segments).toEqual([]);
     expect(plan.warnings[0]).toMatch(/Chưa có clip/);
+  });
+});
+
+describe("buildEdit — ghép nguyên clip, lặp tới hết bài (mặc định)", () => {
+  const fullInput = (clipSeconds: (n: number) => number, audio = 187.3, options: Partial<EditOptions> = {}) => {
+    const input = makeInput({ audioDuration: audio, options: { mode: "full", ...options } });
+    for (const s of input.shots) input.clips[String(s.shot_no)] = { duration: clipSeconds(s.shot_no) };
+    return input;
+  };
+
+  it("mặc định là ghép nguyên clip", () => {
+    expect(DEFAULT_EDIT_OPTIONS.mode).toBe("full");
+  });
+
+  it("mỗi clip phát trọn vẹn từ giây 0, theo thứ tự 1 → N, rồi lặp lại", () => {
+    const input = fullInput(() => 8);
+    const plan = buildEdit(input);
+    expectContiguous(plan);
+    const order = plan.segments.map((s) => s.shot_no);
+    const n = input.shots.length;
+    const shots = input.shots.map((s) => s.shot_no);
+    expect(order.slice(0, n)).toEqual(shots);
+    expect(order.slice(n, 2 * n)).toEqual(shots.slice(0, order.length - n));
+    // Không cắt nhỏ: mọi đoạn trừ đoạn cuối dài đúng 8 giây và bắt đầu từ đầu clip.
+    for (const s of plan.segments.slice(0, -1)) {
+      expect(s.frames).toBe(8 * 24);
+      expect(s.in_point).toBe(0);
+    }
+    expect(plan.round_seconds).toBe(n * 8);
+    expect(plan.rounds).toBeCloseTo(187.3 / (n * 8), 2);
+    expect(plan.warnings).toEqual([]);
+  });
+
+  it("clip dài ngắn khác nhau (5 s, 10 s…) vẫn phát nguyên; cuối bài còn chưa tới 1 s thì giữ khung cuối", () => {
+    const input = fullInput((n) => (n % 2 ? 10 : 5.04), 7.5 * 18 + 10.5);
+    const plan = buildEdit(input);
+    expectContiguous(plan);
+    for (const s of plan.segments.slice(0, -1)) expect(s.frames).toBe(Math.floor(input.clips[String(s.shot_no)].duration * 24 + 1e-6));
+    const last = plan.segments.at(-1)!;
+    expect(last.duration).toBeGreaterThanOrEqual(1);
+  });
+
+  it("thiếu clip thì lặp các clip đã có; xáo các vòng sau không mở vòng bằng clip vừa hết", () => {
+    const input = fullInput(() => 8, 400, { seed: 7 });
+    const shots = input.shots.map((s) => s.shot_no);
+    delete input.clips[String(shots[2])];
+    const plan = buildEdit(input);
+    expectContiguous(plan);
+    const order = plan.segments.map((s) => s.shot_no);
+    expect(order).not.toContain(shots[2]);
+    const m = shots.length - 1;
+    expect(order.slice(0, m)).toEqual(shots.filter((x) => x !== shots[2]));
+    expect(order.slice(m, 2 * m)).not.toEqual(order.slice(0, m));
+    expect(new Set(order.slice(m, 2 * m)).size).toBe(m);
+    for (let i = 1; i < order.length; i++) expect(order[i]).not.toBe(order[i - 1]);
+    expect(plan.warnings.join(" ")).toMatch(/lặp các clip đã có/);
+  });
+
+  it("lật ngang ở các lần lặp lẻ khi bật tuỳ chọn", () => {
+    const plan = buildEdit(fullInput(() => 8, 400, { flipRepeats: true }));
+    expect(plan.segments.filter((s) => s.use === 0).every((s) => !s.flip)).toBe(true);
+    expect(plan.segments.filter((s) => s.use === 1).every((s) => s.flip)).toBe(true);
   });
 });

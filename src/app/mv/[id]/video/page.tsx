@@ -243,8 +243,8 @@ export default function VideoPage() {
           </Link>
           <h1 className="text-3xl uppercase">Ghép video với nhạc</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted">
-            Tải bài hát và các clip mà công cụ tạo video trả về. App tự rải {mv.shots.length} cảnh lên suốt bài: mỗi đoạn dùng cảnh của đoạn đó, lặp lại đến hết bài,
-            điệp khúc cắt nhanh hơn, cắt đúng phách nhạc — rồi xuất ra một file MP4 hoàn chỉnh.
+            Tải bài hát và các clip mà công cụ tạo video trả về. App ghép nguyên từng clip theo thứ tự cảnh 1 → {mv.shots.length}, hết lượt thì lặp lại cho tới hết bài
+            (không cắt nhỏ clip), rồi xuất ra một file MP4 hoàn chỉnh. Muốn cắt dồn dập theo nhịp nhạc thì chọn “Cắt theo nhịp nhạc” ở bước 3.
           </p>
         </div>
         <div className="flex flex-col items-end gap-1 text-xs">
@@ -433,7 +433,13 @@ export default function VideoPage() {
       >
         <Timeline plan={plan} waveform={audio?.waveform ? mediaUrl(mv.id, audio.waveform) : null} now={now} onSeek={audio ? seek : undefined} highlight={hover} onHover={setHover} />
         <p className="mt-2 text-sm">
-          {plan.segments.length ? (
+          {plan.segments.length && options.mode === "full" ? (
+            <>
+              <b>{Object.keys(plan.uses).length}</b> clip phát nguyên, nối liền theo thứ tự · một vòng dài {formatClock(plan.round_seconds ?? 0, 0)} → lặp{" "}
+              <b>{(plan.rounds ?? 0).toFixed(1).replace(".", ",")}</b> vòng cho hết bài {formatClock(plan.duration, 0)} ({plan.segments.length} lượt phát)
+              {!audio && <span className="text-muted"> · (đang dùng độ dài dự kiến — tải bài hát để khớp thật)</span>}
+            </>
+          ) : plan.segments.length ? (
             <>
               <b>{plan.segments.length}</b> nhát cắt · trung bình {avgCut.toFixed(1)} giây/nhát · {Object.keys(plan.uses).length} cảnh, mỗi cảnh xuất hiện khoảng{" "}
               {(plan.segments.length / Math.max(1, Object.keys(plan.uses).length)).toFixed(1)} lần
@@ -451,7 +457,7 @@ export default function VideoPage() {
             ))}
           </ul>
         )}
-        <p className="mt-2 text-xs text-muted">Bấm vào timeline để nghe từ chỗ đó. Rê chuột lên một nhát cắt để thấy cảnh tương ứng ở bước 2.</p>
+        <p className="mt-2 text-xs text-muted">Bấm vào timeline để nghe từ chỗ đó. Rê chuột lên một ô để thấy cảnh tương ứng ở bước 2.</p>
       </Card>
 
       {/* 4. Âm thanh, logo, intro (cách xuất của Bokin Studio Music) */}
@@ -487,7 +493,7 @@ export default function VideoPage() {
               ? "Cần tải bài hát trước."
               : !plan.segments.length
                 ? "Cần ít nhất một clip."
-                : `MP4 ${size.w}×${size.h} · ${options.fps} hình/giây · dài ${formatClock(plan.duration, 0)} · ${plan.segments.length} nhát cắt`}
+                : `MP4 ${size.w}×${size.h} · ${options.fps} hình/giây · dài ${formatClock(plan.duration, 0)} · ${plan.segments.length} ${options.mode === "full" ? "lượt phát clip" : "nhát cắt"}`}
           </span>
         </div>
 

@@ -10,7 +10,7 @@ Bạn chỉ nhập **ý tưởng** của từng bài (1 dòng), công cụ tự 
 
 Chạy được **hàng loạt** (ví dụ 50 bài một lần) và xuất **XLSX (mỗi MV một sheet)**, CSV, Markdown, TXT, JSON, “Copy tất cả prompt” hoặc **File prompt (.txt)** — chỉ gồm các prompt, mỗi prompt cách nhau một dòng trống.
 
-Khi công cụ tạo video trả clip về, app **ghép clip với nhạc thành MV hoàn chỉnh (MP4)**: tự lặp 15–20 cảnh cho hết bài, cắt đúng phách nhạc (xem mục 2b).
+Khi công cụ tạo video trả clip về, app **ghép clip với nhạc thành MV hoàn chỉnh (MP4)**: ghép nguyên từng clip theo thứ tự cảnh và lặp lại cho tới hết bài (xem mục 2b).
 
 ---
 
@@ -67,8 +67,14 @@ Trên trang kết quả của MV bấm **🎬 Ghép video với nhạc**:
 2. **Clip video**: bấm **Tải nhiều clip một lúc** (hoặc kéo thả cả thư mục). File có số cảnh trong tên — `shot-03.mp4`, `cảnh 3.mov`, `03.mp4` — tự vào đúng cảnh;
    file không có số (vd. `veo_20261019_101500.mp4`) được xếp **theo thứ tự tên file** vào các cảnh còn trống — nên tải clip về theo đúng thứ tự cảnh.
    Xếp sai thì dùng **Chuyển sang…** ở từng cảnh. Mỗi ô cảnh có sẵn nút **Copy prompt** để tạo lại clip còn thiếu.
-3. **Cách dựng**: nhịp cắt (chậm / vừa / nhanh), khung hình (1080p, 720p, dọc 9:16 cho Shorts/TikTok), cắt cho đầy khung hay thêm viền đen,
-   24/30 hình/giây, mờ dần đầu/cuối, lật ngang khi lặp, **🎲 Xáo lại** thứ tự lặp. Xem trước ngay trên **timeline** (bấm vào để nghe từ chỗ đó).
+3. **Cách dựng** — chọn một trong hai cách ghép:
+   - **Ghép nguyên clip, lặp đến hết bài** (mặc định): mỗi clip phát **trọn vẹn** (không cắt nhỏ) theo thứ tự cảnh 1 → N; hết lượt thì lặp lại từ clip 1
+     cho tới khi hết nhạc, clip cuối được cắt đúng lúc bài kết thúc. Ví dụ 20 clip × 8 giây = một vòng 2:40; bài 3:00 → phát 20 clip rồi lặp thêm 3 clip đầu.
+     **🎲 Xáo các vòng sau**: vòng đầu vẫn theo thứ tự, các vòng lặp sau đổi thứ tự (không bao giờ hai clip giống nhau liền nhau).
+   - **Cắt theo nhịp nhạc**: cắt clip thành nhiều nhát ngắn 2–5 giây, đoạn nào dùng cảnh của đoạn đó, điểm cắt đúng phách.
+
+   Tuỳ chọn chung: khung hình (1080p, 720p, dọc 9:16 cho Shorts/TikTok), cắt cho đầy khung hay thêm viền đen, 24/30 hình/giây, mờ dần đầu/cuối,
+   lật ngang khi lặp. Xem trước ngay trên **timeline** (bấm vào để nghe từ chỗ đó).
 4. **Âm thanh, logo & intro** (cách xuất của Bokin Studio Music):
    - **Cân bằng âm lượng**: Chuẩn YouTube −14 LUFS (mặc định), −18 LUFS (mặc định của Bokin Studio Music), hoặc tắt.
    - **Chất lượng xuất**: YouTube (đẹp nhất) hoặc Nhanh (để xem thử).
@@ -81,10 +87,13 @@ Trên trang kết quả của MV bấm **🎬 Ghép video với nhạc**:
 
 App dựng thế nào:
 
-- Mỗi đoạn của bài (Intro, Verse, Chorus…) dùng **cảnh của chính đoạn đó**, lặp lại cho tới hết đoạn; đoạn thiếu clip mượn cảnh cùng loại (vd. Chorus 1 ↔ Chorus 2).
-  Không có clip nào bị lặp liền nhau; lần lặp sau lấy **khúc khác** trong clip để đỡ nhàm.
-- Điệp khúc cắt nhanh (khoảng 2–2,5 giây/nhát), verse ~4 giây, intro/outro giữ lâu hơn. Khi nhận ra nhịp, mọi điểm cắt rơi **đúng phách nhạc**.
-- Các đoạn được giãn theo độ dài thật của bài. Nếu điệp khúc thật bắt đầu ở chỗ khác, mở **Mốc các đoạn trong bài**, phát nhạc và bấm **⏱ Đặt ở đây** đúng lúc đoạn bắt đầu.
+- Ghép nguyên clip: các clip nối liền nhau, chuyển clip đúng khung hình; cảnh nào chưa có clip thì bỏ qua và lặp các clip đã có.
+  Nếu cuối bài chỉ còn chưa tới 1 giây, app giữ khung cuối của clip đang phát (lúc đó hình đang mờ dần) thay vì chớp sang clip mới.
+  Clip giống hệt nhau ở các vòng lặp chỉ phải dựng một lần nên nhanh hơn.
+- Cắt theo nhịp: mỗi đoạn của bài (Intro, Verse, Chorus…) dùng **cảnh của chính đoạn đó**, đoạn thiếu clip mượn cảnh cùng loại (vd. Chorus 1 ↔ Chorus 2),
+  lần lặp sau lấy **khúc khác** trong clip; điệp khúc cắt nhanh (khoảng 2–2,5 giây/nhát), verse ~4 giây, intro/outro giữ lâu hơn; khi nhận ra nhịp,
+  mọi điểm cắt rơi **đúng phách nhạc**. Các đoạn được giãn theo độ dài thật của bài; nếu điệp khúc thật bắt đầu ở chỗ khác, mở **Mốc các đoạn trong bài**,
+  phát nhạc và bấm **⏱ Đặt ở đây** đúng lúc đoạn bắt đầu.
 - Tiếng của clip (Veo có tiếng) được tắt — MV chỉ dùng nhạc của bài. Video xuất ra là MP4 H.264 + AAC, xem được trên mọi máy và tải thẳng lên YouTube.
 - **Khâu xuất chuyển từ engine của Bokin Studio Music** (`loop_music/loudness.py`, `quality.py`, `branding.py`, `engine.py`):
   - Bài hát được chuẩn hoá về 48 kHz stereo 24-bit (bài mono được nhân đôi đúng mức).
@@ -94,12 +103,12 @@ App dựng thế nào:
   - Logo (mặt nạ tròn, độ hiện, mờ dần) và intro "title" (mờ từ đen 1,5 s, chữ hiện từ 0,6 s, tắt trong giây cuối, nền nhoè rồi rõ dần 1,5 s) giữ đúng thông số của Bokin Studio Music.
     Chữ được đọc từ file (libass hoặc drawtext) nên không phải escape tên bài.
   - Trước khi công bố file, app **kiểm tra đầu ra**: giải mã toàn bộ hình và tiếng, đúng H.264 + AAC, đủ số khung hình, độ dài hình và tiếng lệch bài hát không quá 0,1 giây.
-- Phần cắt cảnh theo nhịp và lặp 15–20 cảnh là của MV Prompt Studio — engine của Bokin Studio Music chỉ lặp một video nền dưới danh sách bài, không cắt nhiều clip.
+- Phần ghép / lặp 15–20 clip là của MV Prompt Studio — engine của Bokin Studio Music chỉ lặp một video nền dưới danh sách bài.
 - Muốn tự dựng trong CapCut / Premiere: bấm **Danh sách cắt (.csv)** để có thời điểm và clip của từng nhát cắt.
 - Cần **ffmpeg**: app tự cài kèm (`ffmpeg-static`) khi chạy file khởi động. Nếu báo thiếu, cài ffmpeg (Windows: `winget install ffmpeg`, macOS: `brew install ffmpeg`)
   hoặc đặt biến môi trường `FFMPEG_PATH` trỏ tới file ffmpeg.
-- Thời gian dựng (máy thử 4 nhân, bài 3 phút, 20 clip, 1080p): khoảng **2 phút 50 giây** với chất lượng YouTube,
-  khoảng **1 phút 35 giây** với chất lượng Nhanh. 720p nhanh hơn.
+- Thời gian dựng (máy thử 4 nhân, bài 3 phút, 20 clip, 1080p, chất lượng YouTube): ghép nguyên clip khoảng **2 phút** (bật lật ngang khi lặp: khoảng 2 phút 30 giây,
+  vì clip lật phải dựng riêng), cắt theo nhịp khoảng **2 phút 50 giây**. Chất lượng Nhanh và 720p nhanh hơn nhiều.
 
 ### Cách chạy cho người dùng dòng lệnh
 

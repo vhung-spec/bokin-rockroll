@@ -7,6 +7,7 @@ import { isChorus } from "./structure";
 import type { EditOptions, EditPlan, EditSection, EditSegment, MVResult, SectionType, Tempo, VideoProject } from "./types";
 
 export const DEFAULT_EDIT_OPTIONS: EditOptions = {
+  mode: "full",
   pace: "normal",
   snapBeats: true,
   sectionStarts: null,
@@ -160,7 +161,8 @@ export function buildEdit(input: EditInput): EditPlan {
   const duration = input.audioDuration ?? input.planDuration;
   const totalFrames = Math.round(duration * fps);
   const warnings: string[] = [];
-  const beatLen = options.snapBeats && input.beat && input.beat.bpm > 0 ? 60 / input.beat.bpm : null;
+  const full = options.mode === "full";
+  const beatLen = !full && options.snapBeats && input.beat && input.beat.bpm > 0 ? 60 / input.beat.bpm : null;
   const sections = resolveSections(input, duration);
 
   const available = input.shots.filter((s) => (input.clips[String(s.shot_no)]?.duration ?? 0) > 0.2);
@@ -173,7 +175,9 @@ export function buildEdit(input: EditInput): EditPlan {
     return plan;
   }
   if (missing.length) {
-    warnings.push(`Còn ${missing.length} cảnh chưa có clip (#${missing.join(", #")}) — đoạn thiếu clip sẽ mượn cảnh cùng loại.`);
+    warnings.push(
+      `Còn ${missing.length} cảnh chưa có clip (#${missing.join(", #")}) — ` + (full ? "MV sẽ lặp các clip đã có." : "đoạn thiếu clip sẽ mượn cảnh cùng loại."),
+    );
   }
 
   const rand = rng(options.seed);
@@ -184,73 +188,104 @@ export function buildEdit(input: EditInput): EditPlan {
   let prev: number | null = null;
   const raw: { start: number; end: number; shot_no: number; section_index: number }[] = [];
 
-  sections.forEach((sec, si) => {
-    // Kho clip của đoạn: cảnh của chính đoạn → thêm cảnh cùng loại nếu ít → mọi cảnh nếu vẫn thiếu.
-    const own = available.filter((s) => s.section === sec.name).map((s) => s.shot_no);
-    let pool = [...own];
-    if (pool.length < 3) {
-      const extra = available.filter((s) => s.section !== sec.name && related(typeOf.get(s.section) ?? "other", sec.type)).map((s) => s.shot_no);
-      pool.push(...(options.seed ? shuffle(extra, rand) : extra));
-    }
-    if (pool.length < 2) {
-      const all = available.map((s) => s.shot_no).filter((n) => !pool.includes(n));
-      pool.push(...(options.seed ? shuffle(all, rand) : all));
-    }
-    if (options.seed && pool.length > 1) {
-      // Giữ cảnh của chính đoạn lên trước, xáo phần lặp.
-      pool = [...shuffle(pool.slice(0, own.length), rand), ...pool.slice(own.length)];
-    }
-
-    let cut = BASE_CUT[sec.type] * PACE_FACTOR[options.pace] * TEMPO_FACTOR[input.tempo];
-    // Đoạn ngắn mà có nhiều cảnh riêng: cắt ngắn lại để cảnh nào cũng được xuất hiện ít nhất một lần.
-    const fitAll = own.length > 1 ? (sec.end - sec.start) / own.length : Infinity;
-    const mustFit = fitAll < cut;
-    if (mustFit) cut = Math.max(MIN_CUT, fitAll);
-    if (beatLen) {
-      const bar = beatLen * 4;
-      const snap = mustFit ? Math.floor : Math.round;
-      cut = cut >= bar * 0.75 ? Math.max(1, snap(cut / bar)) * bar : Math.max(1, snap(cut / beatLen)) * beatLen;
-    }
-
-    let k = 0;
-    let t = sec.start;
-    const queue = cutPoints(sec.start, sec.end, cut, beatLen ? { beat: beatLen, offset: input.beat!.offset } : null);
-    while (queue.length) {
-      const end = queue.shift()!;
-      const len = end - t;
-      // Chọn clip kế tiếp trong kho, tránh lặp lại clip vừa dùng và ưu tiên clip đủ dài.
-      let pick: number | null = null;
-      for (let j = 0; j < pool.length; j++) {
-        const cand = pool[(k + j) % pool.length];
-        if (cand === prev && pool.length > 1) continue;
-        if (clipDur(cand) + 1e-6 >= len) {
-          pick = cand;
-          k = k + j + 1;
-          break;
+  if (full) {
+    // Ghép nguyên clip: vòng đầu theo thứ tự cảnh, hết vòng thì lặp lại cho tới hết bài.
+    // Có seed thì các vòng sau được xáo (như plan_repeat của Bokin Studio Music), không mở vòng bằng clip vừa hết.
+    const order = available.map((s) => s.shot_no);
+    const lens = new Map(order.map((n) => [n, Math.floor(clipDur(n) * fps + 1e-6) / fps]));
+    const roundSeconds = order.reduce((a, n) => a + lens.get(n)!, 0);
+    plan.round_seconds = round3(roundSeconds);
+    plan.rounds = Math.round((duration / roundSeconds) * 100) / 100;
+    const sectionAt = (t: number) => Math.max(0, sections.findIndex((sec) => t >= sec.start - 1e-9 && t < sec.end));
+    let t = 0;
+    for (let round = 0; duration - t > 1e-6; round++) {
+      let list = order;
+      if (round > 0 && options.seed && order.length > 1) {
+        list = shuffle(order, rand);
+        if (list[0] === prev) [list[0], list[1]] = [list[1], list[0]];
+      }
+      for (const n of list) {
+        if (duration - t <= 1e-6) break;
+        const end = Math.min(duration, t + lens.get(n)!);
+        raw.push({ start: t, end, shot_no: n, section_index: sectionAt(t) });
+        t = end;
+        prev = n;
+        // Cuối bài còn chưa tới 1 giây: giữ khung cuối của clip này (đang mờ dần) thay vì chớp sang clip mới.
+        if (duration - t > 1e-6 && duration - t < 1) {
+          raw[raw.length - 1].end = duration;
+          t = duration;
         }
       }
-      if (pick === null) {
-        // Không clip nào đủ dài: lấy clip dài nhất, phần còn lại thành nhát cắt mới.
-        const cands = pool.filter((c) => c !== prev || pool.length === 1);
-        pick = cands.reduce((a, b) => (clipDur(b) > clipDur(a) ? b : a), cands[0]);
-        k++;
-        const usable = clipDur(pick);
-        if (usable < len - 0.05) {
-          queue.unshift(end);
-          raw.push({ start: t, end: t + usable, shot_no: pick, section_index: si });
-          t += usable;
-        } else {
-          raw.push({ start: t, end, shot_no: pick, section_index: si });
-          t = end;
+    }
+  } else {
+    sections.forEach((sec, si) => {
+      // Kho clip của đoạn: cảnh của chính đoạn → thêm cảnh cùng loại nếu ít → mọi cảnh nếu vẫn thiếu.
+      const own = available.filter((s) => s.section === sec.name).map((s) => s.shot_no);
+      let pool = [...own];
+      if (pool.length < 3) {
+        const extra = available.filter((s) => s.section !== sec.name && related(typeOf.get(s.section) ?? "other", sec.type)).map((s) => s.shot_no);
+        pool.push(...(options.seed ? shuffle(extra, rand) : extra));
+      }
+      if (pool.length < 2) {
+        const all = available.map((s) => s.shot_no).filter((n) => !pool.includes(n));
+        pool.push(...(options.seed ? shuffle(all, rand) : all));
+      }
+      if (options.seed && pool.length > 1) {
+        // Giữ cảnh của chính đoạn lên trước, xáo phần lặp.
+        pool = [...shuffle(pool.slice(0, own.length), rand), ...pool.slice(own.length)];
+      }
+
+      let cut = BASE_CUT[sec.type] * PACE_FACTOR[options.pace] * TEMPO_FACTOR[input.tempo];
+      // Đoạn ngắn mà có nhiều cảnh riêng: cắt ngắn lại để cảnh nào cũng được xuất hiện ít nhất một lần.
+      const fitAll = own.length > 1 ? (sec.end - sec.start) / own.length : Infinity;
+      const mustFit = fitAll < cut;
+      if (mustFit) cut = Math.max(MIN_CUT, fitAll);
+      if (beatLen) {
+        const bar = beatLen * 4;
+        const snap = mustFit ? Math.floor : Math.round;
+        cut = cut >= bar * 0.75 ? Math.max(1, snap(cut / bar)) * bar : Math.max(1, snap(cut / beatLen)) * beatLen;
+      }
+
+      let k = 0;
+      let t = sec.start;
+      const queue = cutPoints(sec.start, sec.end, cut, beatLen ? { beat: beatLen, offset: input.beat!.offset } : null);
+      while (queue.length) {
+        const end = queue.shift()!;
+        const len = end - t;
+        // Chọn clip kế tiếp trong kho, tránh lặp lại clip vừa dùng và ưu tiên clip đủ dài.
+        let pick: number | null = null;
+        for (let j = 0; j < pool.length; j++) {
+          const cand = pool[(k + j) % pool.length];
+          if (cand === prev && pool.length > 1) continue;
+          if (clipDur(cand) + 1e-6 >= len) {
+            pick = cand;
+            k = k + j + 1;
+            break;
+          }
         }
+        if (pick === null) {
+          // Không clip nào đủ dài: lấy clip dài nhất, phần còn lại thành nhát cắt mới.
+          const cands = pool.filter((c) => c !== prev || pool.length === 1);
+          pick = cands.reduce((a, b) => (clipDur(b) > clipDur(a) ? b : a), cands[0]);
+          k++;
+          const usable = clipDur(pick);
+          if (usable < len - 0.05) {
+            queue.unshift(end);
+            raw.push({ start: t, end: t + usable, shot_no: pick, section_index: si });
+            t += usable;
+          } else {
+            raw.push({ start: t, end, shot_no: pick, section_index: si });
+            t = end;
+          }
+          prev = pick;
+          continue;
+        }
+        raw.push({ start: t, end, shot_no: pick, section_index: si });
+        t = end;
         prev = pick;
-        continue;
       }
-      raw.push({ start: t, end, shot_no: pick, section_index: si });
-      t = end;
-      prev = pick;
-    }
-  });
+    });
+  }
 
   // Quy về khung hình, liền mạch tuyệt đối từ 0 đến hết bài.
   let frameCursor = 0;
@@ -262,7 +297,7 @@ export function buildEdit(input: EditInput): EditPlan {
     const use = useCount.get(r.shot_no) ?? 0;
     useCount.set(r.shot_no, use + 1);
     const slack = Math.max(0, clipDur(r.shot_no) - dur);
-    const inPoint = use === 0 ? 0 : Math.floor(slack * IN_POINTS[use % IN_POINTS.length] * fps) / fps;
+    const inPoint = full || use === 0 ? 0 : Math.floor(slack * IN_POINTS[use % IN_POINTS.length] * fps) / fps;
     const seg: EditSegment = {
       start_frame: frameCursor,
       frames,
@@ -282,7 +317,9 @@ export function buildEdit(input: EditInput): EditPlan {
   });
 
   const unused = available.filter((s) => !plan.uses[String(s.shot_no)]).map((s) => s.shot_no);
-  if (unused.length) warnings.push(`Cảnh #${unused.join(", #")} có clip nhưng chưa được dùng (đoạn của cảnh quá ngắn).`);
+  if (unused.length) {
+    warnings.push(`Cảnh #${unused.join(", #")} có clip nhưng chưa được dùng (${full ? "bài ngắn hơn một vòng clip" : "đoạn của cảnh quá ngắn"}).`);
+  }
   const short = available.filter((s) => clipDur(s.shot_no) < 2).map((s) => s.shot_no);
   if (short.length) warnings.push(`Clip cảnh #${short.join(", #")} ngắn dưới 2 giây.`);
   return plan;

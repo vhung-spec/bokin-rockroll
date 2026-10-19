@@ -42,6 +42,7 @@ export const zSettings = z.object({
 }).refine((s) => s.minShots <= s.maxShots, { message: "Số cảnh tối thiểu phải ≤ số cảnh tối đa", path: ["minShots"] });
 
 export const zEditOptions = z.object({
+  mode: z.enum(["full", "beat"]),
   pace: z.enum(["slow", "normal", "fast"]),
   snapBeats: z.boolean(),
   sectionStarts: z.array(z.number().min(0).max(7200)).max(50).nullable(),

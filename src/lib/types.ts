@@ -367,10 +367,16 @@ export interface AudioTrack extends MediaFile {
 }
 
 export type CutPace = "slow" | "normal" | "fast";
+export type EditMode = "full" | "beat";
 export type RenderSize = "1080p" | "720p" | "shorts";
 
 export interface EditOptions {
-  /** Nhịp cắt cảnh. */
+  /**
+   * full = ghép nguyên từng clip theo thứ tự cảnh, hết lượt thì lặp lại cho tới hết bài (không cắt nhỏ clip);
+   * beat = cắt clip thành nhiều nhát ngắn theo nhịp nhạc và đoạn của bài.
+   */
+  mode: EditMode;
+  /** Nhịp cắt cảnh (chế độ beat). */
   pace: CutPace;
   /** Cắt đúng phách nhạc (khi nhận ra nhịp). */
   snapBeats: boolean;
@@ -525,6 +531,9 @@ export interface EditPlan {
   segments: EditSegment[];
   /** Số lần dùng và tổng thời lượng của mỗi cảnh. */
   uses: Record<string, { count: number; seconds: number }>;
+  /** Chế độ full: độ dài một vòng (mọi clip phát một lần) và số vòng phủ hết bài. */
+  round_seconds?: number;
+  rounds?: number;
   warnings: string[];
 }
 
