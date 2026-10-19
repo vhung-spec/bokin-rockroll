@@ -1,0 +1,844 @@
+{
+  "global_forbidden": [
+    {
+      "term": "smartphone",
+      "patterns": [
+        "smart ?phones?",
+        "cell ?phones?",
+        "mobile phones?",
+        "iphones?",
+        "texting"
+      ],
+      "label_vi": "Điện thoại di động"
+    },
+    {
+      "term": "laptop",
+      "patterns": [
+        "laptops?",
+        "tablets? computer",
+        "ipads?",
+        "touch ?screens?",
+        "computer monitors?"
+      ],
+      "label_vi": "Máy tính / màn hình cảm ứng"
+    },
+    {
+      "term": "LED",
+      "patterns": [
+        "LEDs?",
+        "LED (signs?|screens?|lights?|strips?)"
+      ],
+      "case_sensitive": true,
+      "label_vi": "Đèn/biển LED"
+    },
+    {
+      "term": "digital screen",
+      "patterns": [
+        "digital (screens?|billboards?|signs?|displays?|clocks?)",
+        "flat[- ]?screens?",
+        "video walls?",
+        "jumbotrons?"
+      ],
+      "label_vi": "Màn hình điện tử"
+    },
+    {
+      "term": "selfie",
+      "patterns": [
+        "selfies?",
+        "selfie sticks?"
+      ],
+      "label_vi": "Selfie"
+    },
+    {
+      "term": "drone",
+      "patterns": [
+        "drones?"
+      ],
+      "label_vi": "Drone (nếu là cách quay, hãy ghi 'aerial-style shot')"
+    },
+    {
+      "term": "earbuds",
+      "patterns": [
+        "earbuds?",
+        "airpods?",
+        "bluetooth",
+        "wi-?fi"
+      ],
+      "label_vi": "Thiết bị không dây hiện đại"
+    },
+    {
+      "term": "digital camera",
+      "patterns": [
+        "digital cameras?",
+        "dslrs?",
+        "gopros?",
+        "ring lights?"
+      ],
+      "label_vi": "Máy ảnh kỹ thuật số"
+    },
+    {
+      "term": "modern car",
+      "patterns": [
+        "suvs?",
+        "minivans?",
+        "electric cars?",
+        "hybrid cars?",
+        "teslas?",
+        "modern cars?",
+        "crossover vehicles?"
+      ],
+      "label_vi": "Xe hơi hiện đại"
+    },
+    {
+      "term": "plastic bottle",
+      "patterns": [
+        "plastic (water )?bottles?",
+        "energy drinks?",
+        "coffee cups? with lids?"
+      ],
+      "label_vi": "Đồ dùng nhựa hiện đại"
+    },
+    {
+      "term": "barcode",
+      "patterns": [
+        "barcodes?",
+        "qr codes?",
+        "hashtags?",
+        "emojis?"
+      ],
+      "label_vi": "Ký hiệu hiện đại"
+    },
+    {
+      "term": "modern infrastructure",
+      "patterns": [
+        "wind turbines?",
+        "solar panels?",
+        "satellite dish(es)?",
+        "cell towers?",
+        "glass skyscrapers? with curtain walls"
+      ],
+      "label_vi": "Công trình hiện đại"
+    },
+    {
+      "term": "modern fashion",
+      "patterns": [
+        "skinny jeans",
+        "ripped jeans",
+        "yoga pants",
+        "leggings",
+        "hoodies?",
+        "baseball caps? backwards",
+        "crocs",
+        "tattoo sleeves?"
+      ],
+      "label_vi": "Trang phục hiện đại"
+    }
+  ],
+  "introduced": [
+    {
+      "term": "transistor radio",
+      "year": 1954,
+      "patterns": [
+        "transistor radios?",
+        "pocket radios?"
+      ]
+    },
+    {
+      "term": "color television",
+      "year": 1954,
+      "patterns": [
+        "colou?r (tv|television)s?"
+      ]
+    },
+    {
+      "term": "3-D movie glasses",
+      "year": 1952,
+      "patterns": [
+        "3-?d glasses"
+      ]
+    },
+    {
+      "term": "Greyhound Scenicruiser",
+      "year": 1954,
+      "patterns": [
+        "scenicruisers?"
+      ]
+    },
+    {
+      "term": "Frisbee",
+      "year": 1957,
+      "patterns": [
+        "frisbees?",
+        "flying discs?"
+      ]
+    },
+    {
+      "term": "hula hoop",
+      "year": 1958,
+      "patterns": [
+        "hula[- ]?hoops?"
+      ]
+    },
+    {
+      "term": "stereo hi-fi",
+      "year": 1958,
+      "patterns": [
+        "stereo (records?|hi-?fi|lps?)"
+      ]
+    },
+    {
+      "term": "jet airliner",
+      "year": 1958,
+      "patterns": [
+        "jet airliners?",
+        "jetliners?",
+        "passenger jets?"
+      ]
+    },
+    {
+      "term": "Sputnik",
+      "year": 1957,
+      "patterns": [
+        "sputnik"
+      ]
+    },
+    {
+      "term": "hand jive / the stroll dance",
+      "year": 1958,
+      "patterns": [
+        "hand jive",
+        "(dance|dancing|doing) the stroll",
+        "stroll line dance"
+      ]
+    },
+    {
+      "term": "beatnik",
+      "year": 1958,
+      "patterns": [
+        "beatniks?"
+      ]
+    },
+    {
+      "term": "Capitol Records tower",
+      "year": 1956,
+      "patterns": [
+        "capitol records? (building|tower)",
+        "stack[- ]of[- ]records tower"
+      ]
+    },
+    {
+      "term": "Welcome to Fabulous Las Vegas sign",
+      "year": 1959,
+      "patterns": [
+        "welcome to (fabulous )?las vegas"
+      ]
+    },
+    {
+      "term": "Hollywood Walk of Fame",
+      "year": 1960,
+      "patterns": [
+        "walk of fame"
+      ]
+    },
+    {
+      "term": "the Twist dance craze",
+      "year": 1960,
+      "patterns": [
+        "(doing|dance|dancing) the twist",
+        "twist dance"
+      ]
+    },
+    {
+      "term": "beehive hairdo",
+      "year": 1960,
+      "patterns": [
+        "beehive (hair(do|style)?)?"
+      ]
+    },
+    {
+      "term": "Beatles mop-top",
+      "year": 1963,
+      "patterns": [
+        "mop-?tops?"
+      ]
+    },
+    {
+      "term": "go-go boots",
+      "year": 1964,
+      "patterns": [
+        "go-?go boots"
+      ]
+    },
+    {
+      "term": "miniskirt",
+      "year": 1965,
+      "patterns": [
+        "mini-?skirts?"
+      ]
+    },
+    {
+      "term": "bell-bottoms",
+      "year": 1966,
+      "patterns": [
+        "bell-?bottoms?"
+      ]
+    },
+    {
+      "term": "tie-dye",
+      "year": 1966,
+      "patterns": [
+        "tie-?dyed?"
+      ]
+    },
+    {
+      "term": "Gateway Arch",
+      "year": 1965,
+      "patterns": [
+        "gateway arch"
+      ]
+    },
+    {
+      "term": "World Trade Center",
+      "year": 1973,
+      "patterns": [
+        "twin towers",
+        "world trade cent(er|re)"
+      ]
+    },
+    {
+      "term": "Chevrolet Corvette",
+      "year": 1953,
+      "patterns": [
+        "corvettes?"
+      ]
+    },
+    {
+      "term": "Cadillac Eldorado",
+      "year": 1953,
+      "patterns": [
+        "eldorados?"
+      ]
+    },
+    {
+      "term": "Buick Skylark",
+      "year": 1953,
+      "patterns": [
+        "buick skylarks?",
+        "skylark convertibles?"
+      ]
+    },
+    {
+      "term": "Ford Thunderbird",
+      "year": 1955,
+      "patterns": [
+        "thunderbirds?",
+        "t-?birds?"
+      ]
+    },
+    {
+      "term": "Chevrolet Nomad",
+      "year": 1955,
+      "patterns": [
+        "(chevrolet|chevy) nomads?",
+        "nomad (wagons?|station wagons?)"
+      ]
+    },
+    {
+      "term": "Chrysler 300",
+      "year": 1955,
+      "patterns": [
+        "chrysler (c-)?300"
+      ]
+    },
+    {
+      "term": "Lincoln Continental Mark II",
+      "year": 1956,
+      "patterns": [
+        "continental mark ii"
+      ]
+    },
+    {
+      "term": "Plymouth Fury",
+      "year": 1956,
+      "patterns": [
+        "plymouth fury"
+      ]
+    },
+    {
+      "term": "Chevrolet Impala",
+      "year": 1958,
+      "patterns": [
+        "impalas?"
+      ]
+    },
+    {
+      "term": "Edsel",
+      "year": 1958,
+      "patterns": [
+        "edsels?"
+      ]
+    },
+    {
+      "term": "Chevrolet El Camino",
+      "year": 1959,
+      "patterns": [
+        "el caminos?"
+      ]
+    },
+    {
+      "term": "Ford Galaxie",
+      "year": 1959,
+      "patterns": [
+        "galaxie\\b",
+        "ford galaxies"
+      ]
+    },
+    {
+      "term": "Ford Mustang",
+      "year": 1964,
+      "patterns": [
+        "mustangs? (car|convertible|fastback)",
+        "ford mustangs?"
+      ]
+    },
+    {
+      "term": "Pontiac GTO",
+      "year": 1964,
+      "patterns": [
+        "gtos?"
+      ]
+    },
+    {
+      "term": "Chevrolet Camaro",
+      "year": 1966,
+      "patterns": [
+        "camaros?"
+      ]
+    }
+  ],
+  "vehicle_makes": [
+    "Chevrolet",
+    "Chevy",
+    "Ford",
+    "Cadillac",
+    "Buick",
+    "Oldsmobile",
+    "Pontiac",
+    "Plymouth",
+    "Dodge",
+    "Chrysler",
+    "DeSoto",
+    "Lincoln",
+    "Mercury",
+    "Packard",
+    "Studebaker",
+    "Nash",
+    "Hudson",
+    "Kaiser",
+    "Willys",
+    "Jeep",
+    "Imperial",
+    "Edsel",
+    "Rambler",
+    "Volkswagen",
+    "MG",
+    "Jaguar",
+    "Mercedes-Benz",
+    "Mercedes",
+    "Porsche",
+    "Triumph",
+    "Harley-Davidson",
+    "Indian",
+    "Austin-Healey",
+    "Thunderbird",
+    "Corvette",
+    "Bel Air",
+    "Fairlane",
+    "Crestline"
+  ],
+  "brands_and_people": [
+    "Coca-Cola",
+    "Coke",
+    "Pepsi",
+    "Wurlitzer",
+    "Seeburg",
+    "Kodak",
+    "Polaroid",
+    "Levi's",
+    "Ray-Ban",
+    "Zippo",
+    "Marlboro",
+    "Disney",
+    "Disneyland",
+    "Mickey Mouse",
+    "Superman",
+    "Batman",
+    "Wonder Woman",
+    "Elvis",
+    "Presley",
+    "Marilyn Monroe",
+    "James Dean",
+    "Marlon Brando",
+    "Buddy Holly",
+    "Chuck Berry",
+    "Little Richard",
+    "Fats Domino",
+    "Jerry Lee Lewis",
+    "Bill Haley",
+    "Frank Sinatra",
+    "Dean Martin",
+    "Audrey Hepburn",
+    "Grace Kelly",
+    "Ritchie Valens",
+    "Ray Charles",
+    "Johnny Cash",
+    "Sammy Davis",
+    "McDonald's",
+    "Starbucks",
+    "Hollywood sign"
+  ],
+  "on_screen_text_patterns": [
+    "on-?screen text",
+    "text overlay",
+    "captions?",
+    "subtitles?",
+    "title cards?",
+    "lettering",
+    "typography",
+    "logos?",
+    "watermarks?",
+    "sign (reading|that reads|says|saying)",
+    "(the )?words? [\"“']",
+    "written on",
+    "spelled out"
+  ],
+  "years": {
+    "1950": {
+      "vehicles": [
+        "1949 Ford Custom",
+        "1950 Chevrolet Styleline",
+        "1949 Mercury Eight",
+        "1950 Studebaker Champion (bullet nose)",
+        "1948 Cadillac Series 62",
+        "1950 Buick Roadmaster",
+        "1949 Hudson Commodore",
+        "1946 Ford woodie wagon",
+        "1950 Nash Rambler"
+      ],
+      "hairstyles": [
+        "men: slicked-back side part, early pompadour, crew cut",
+        "women: victory rolls, pin curls, short poodle cut"
+      ],
+      "fashion": [
+        "women: New Look full skirts, nipped waists, shirtwaist dresses, gloves and small hats",
+        "men: wide-lapel suits, fedoras, high-waisted pleated trousers"
+      ],
+      "props": [
+        "tabletop tube radio",
+        "jukebox",
+        "45 rpm records",
+        "rotary dial telephone",
+        "black-and-white console TV",
+        "soda fountain"
+      ],
+      "music_dance": [
+        "jitterbug",
+        "swing",
+        "early doo-wop street-corner harmony"
+      ],
+      "notes_vi": "Đầu thập niên: phong cách cuối 1940s còn rõ. TV đen trắng bắt đầu phổ biến."
+    },
+    "1951": {
+      "vehicles": [
+        "1951 Chevrolet Bel Air hardtop",
+        "1951 Ford Victoria",
+        "1951 Hudson Hornet",
+        "1951 Cadillac Series 62",
+        "1951 Studebaker Commander",
+        "1950 Ford Custom",
+        "1949 Mercury Eight"
+      ],
+      "hairstyles": [
+        "men: pompadour, crew cut, slicked-back",
+        "women: poodle cut, pin curls, shoulder-length waves"
+      ],
+      "fashion": [
+        "women: full skirts, sweater sets with pearls, saddle shoes",
+        "men: sport coats, knit ties, fedoras"
+      ],
+      "props": [
+        "jukebox",
+        "45 rpm records",
+        "black-and-white TV",
+        "rotary phone",
+        "box camera"
+      ],
+      "music_dance": [
+        "jitterbug",
+        "doo-wop",
+        "jump blues"
+      ],
+      "notes_vi": ""
+    },
+    "1952": {
+      "vehicles": [
+        "1952 Ford Crestline",
+        "1952 Lincoln Capri",
+        "1952 Chrysler New Yorker",
+        "1951 Chevrolet Bel Air",
+        "1951 Hudson Hornet",
+        "1952 Kaiser Manhattan"
+      ],
+      "hairstyles": [
+        "men: pompadour, ducktail, flattop",
+        "women: poodle cut, short curls, early ponytail"
+      ],
+      "fashion": [
+        "women: circle skirts, cinched belts, cat-eye glasses",
+        "men: letterman jackets, chinos, loafers"
+      ],
+      "props": [
+        "3-D movie glasses (craze 1952–54)",
+        "jukebox",
+        "45 rpm records",
+        "black-and-white TV"
+      ],
+      "music_dance": [
+        "jitterbug",
+        "doo-wop",
+        "bunny hop"
+      ],
+      "notes_vi": "Cơn sốt phim 3-D bắt đầu."
+    },
+    "1953": {
+      "vehicles": [
+        "1953 Chevrolet Corvette (white)",
+        "1953 Cadillac Eldorado convertible",
+        "1953 Buick Skylark",
+        "1953 Studebaker Starliner coupe",
+        "1953 Oldsmobile Fiesta",
+        "1952 Ford Crestline"
+      ],
+      "hairstyles": [
+        "men: pompadour, ducktail",
+        "women: Italian cut, poodle cut, ponytail"
+      ],
+      "fashion": [
+        "women: poodle skirts, capri pants, halter sundresses",
+        "men: leather motorcycle jackets, white T-shirts, cuffed jeans"
+      ],
+      "props": [
+        "3-D glasses",
+        "jukebox",
+        "black-and-white TV",
+        "Polaroid-style instant camera",
+        "rotary phone"
+      ],
+      "music_dance": [
+        "jitterbug",
+        "doo-wop",
+        "mambo"
+      ],
+      "notes_vi": "Phong cách áo da + áo thun trắng trở thành biểu tượng giới trẻ."
+    },
+    "1954": {
+      "vehicles": [
+        "1954 Chevrolet Bel Air",
+        "1954 Ford Crestline Skyliner",
+        "1954 Mercury Monterey",
+        "1954 Cadillac Series 62",
+        "1953 Cadillac Eldorado convertible",
+        "1953 Chevrolet Corvette",
+        "1954 Mercedes-Benz 300SL gullwing",
+        "1954 Kaiser Darrin"
+      ],
+      "hairstyles": [
+        "men: glossy pompadour, ducktail",
+        "women: Italian cut, ponytail with scarf, soft curls"
+      ],
+      "fashion": [
+        "women: full-skirted sundresses, circle skirts, cardigans, saddle shoes",
+        "men: varsity jackets, camp shirts, cuffed jeans, penny loafers"
+      ],
+      "props": [
+        "jukebox",
+        "45 rpm records",
+        "transistor radio (rare, from late 1954)",
+        "color TV (very rare)",
+        "drive-in speakers"
+      ],
+      "music_dance": [
+        "jitterbug",
+        "mambo craze",
+        "cha-cha",
+        "early rock and roll"
+      ],
+      "notes_vi": "Rock & roll bắt đầu bùng nổ. Radio bán dẫn xuất hiện cuối năm 1954."
+    },
+    "1955": {
+      "vehicles": [
+        "1955 Chevrolet Bel Air",
+        "1955 Ford Thunderbird",
+        "1955 Chrysler C-300",
+        "1955 Ford Fairlane Crown Victoria",
+        "1955 Packard Caribbean",
+        "1955 Pontiac Star Chief",
+        "1955 Chevrolet Nomad",
+        "1954 Chevrolet Bel Air"
+      ],
+      "hairstyles": [
+        "men: pompadour, ducktail, flattop",
+        "women: ponytail, short curly bob, Italian cut"
+      ],
+      "fashion": [
+        "women: poodle skirts, pedal pushers, sweater girls, saddle shoes",
+        "men: red jackets, white T-shirts, jeans, leather jackets"
+      ],
+      "props": [
+        "transistor radio",
+        "jukebox",
+        "45 rpm records",
+        "coonskin caps (craze)",
+        "malt shop milkshakes"
+      ],
+      "music_dance": [
+        "rock and roll",
+        "jitterbug",
+        "cha-cha",
+        "doo-wop"
+      ],
+      "notes_vi": "Rock & roll trở thành dòng chính. Thunderbird ra mắt."
+    },
+    "1956": {
+      "vehicles": [
+        "1956 Ford Thunderbird (porthole hardtop)",
+        "1956 Lincoln Continental Mark II",
+        "1956 Chevrolet Bel Air",
+        "1956 Ford F-100 pickup",
+        "1956 Cadillac Eldorado Biarritz",
+        "1956 Plymouth Fury",
+        "1955 Chevrolet Bel Air"
+      ],
+      "hairstyles": [
+        "men: high pompadour, ducktail, sideburns",
+        "women: ponytail, poodle cut, bouffant beginnings"
+      ],
+      "fashion": [
+        "women: circle skirts with petticoats, capri pants, ballet flats",
+        "men: leather jackets, bowling shirts, two-tone shoes"
+      ],
+      "props": [
+        "transistor radio",
+        "jukebox",
+        "45 rpm records",
+        "drive-in speakers",
+        "rotary phone"
+      ],
+      "music_dance": [
+        "rock and roll",
+        "rockabilly",
+        "bop",
+        "jitterbug"
+      ],
+      "notes_vi": "Rockabilly bùng nổ. Đạo luật đường cao tốc liên bang ký năm 1956 (chưa có biển interstate)."
+    },
+    "1957": {
+      "vehicles": [
+        "1957 Chevrolet Bel Air",
+        "1957 Ford Fairlane 500 Skyliner",
+        "1957 Cadillac Eldorado Brougham",
+        "1957 Plymouth Fury",
+        "1957 Chrysler 300C",
+        "1957 Ford Thunderbird",
+        "1956 Ford Thunderbird"
+      ],
+      "hairstyles": [
+        "men: pompadour, ducktail, flattop",
+        "women: ponytail, short bouffant, curled bob"
+      ],
+      "fashion": [
+        "women: sack dresses, full skirts, cat-eye sunglasses, chiffon scarves",
+        "men: skinny ties, Ivy League sport coats, leather jackets"
+      ],
+      "props": [
+        "transistor radio",
+        "Frisbee (Pluto Platter)",
+        "jukebox",
+        "45 rpm records"
+      ],
+      "music_dance": [
+        "rock and roll",
+        "bop",
+        "calypso craze",
+        "doo-wop"
+      ],
+      "notes_vi": "Vệ tinh Sputnik (tháng 10/1957). Vây đuôi xe ngày càng lớn."
+    },
+    "1958": {
+      "vehicles": [
+        "1958 Chevrolet Impala",
+        "1958 Ford Thunderbird (square-bird)",
+        "1958 Edsel",
+        "1958 Plymouth Fury",
+        "1958 Cadillac Eldorado Biarritz",
+        "1957 Chevrolet Bel Air",
+        "1957 Ford Fairlane 500"
+      ],
+      "hairstyles": [
+        "men: pompadour, ducktail, Ivy League cut",
+        "women: bouffant, ponytail, short curly cut"
+      ],
+      "fashion": [
+        "women: sheath dresses, capri pants, cardigans, ballet flats",
+        "men: skinny ties, cardigans, chinos, loafers"
+      ],
+      "props": [
+        "hula hoop",
+        "Frisbee",
+        "stereo hi-fi",
+        "transistor radio",
+        "jukebox"
+      ],
+      "music_dance": [
+        "rock and roll",
+        "the stroll",
+        "hand jive",
+        "doo-wop"
+      ],
+      "notes_vi": "Cơn sốt vòng hula hoop. Máy bay phản lực chở khách bắt đầu bay."
+    },
+    "1959": {
+      "vehicles": [
+        "1959 Cadillac Eldorado (tallest tail fins)",
+        "1959 Chevrolet Impala (batwing fins)",
+        "1959 Chevrolet El Camino",
+        "1959 Ford Galaxie",
+        "1959 Pontiac Bonneville",
+        "1958 Chevrolet Impala",
+        "1957 Chevrolet Bel Air"
+      ],
+      "hairstyles": [
+        "men: pompadour, Ivy League cut, flattop",
+        "women: bouffant, flipped bob, ponytail"
+      ],
+      "fashion": [
+        "women: sheath dresses, capri pants, pillbox hats, pastel sweaters",
+        "men: slim suits, skinny ties, narrow lapels"
+      ],
+      "props": [
+        "hula hoop",
+        "stereo hi-fi",
+        "transistor radio",
+        "jukebox",
+        "Frisbee"
+      ],
+      "music_dance": [
+        "rock and roll",
+        "doo-wop",
+        "the stroll",
+        "cha-cha"
+      ],
+      "notes_vi": "Cuối thập niên: vây đuôi xe đạt đỉnh. Bảng chào mừng Las Vegas dựng năm 1959."
+    }
+  }
+}

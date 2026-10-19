@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* Bảng màu retro 1950s: kem, đỏ cherry, xanh mint, chrome. */
+@theme {
+  --color-cream: #fff8e7;
+  --color-cream-dark: #f3e6c4;
+  --color-cherry: #c8102e;
+  --color-cherry-dark: #9e0c24;
+  --color-mint: #9fe0cf;
+  --color-mint-dark: #2f9e86;
+  --color-chrome: #d9dde3;
+  --color-ink: #23201c;
+  --color-muted: #6f675b;
+  --font-display: "Pacifico", "Brush Script MT", cursive;
+  --font-head: "Oswald", "Arial Narrow", system-ui, sans-serif;
+  --font-sans: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html {
+  background: var(--color-cream);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-cream);
+  background-image: radial-gradient(rgba(200, 16, 46, 0.05) 1px, transparent 1px);
+  background-size: 18px 18px;
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-head);
+  letter-spacing: 0.02em;
+}
+
+@utility card {
+  @apply rounded-xl border-2 border-ink/80 bg-white shadow-[4px_4px_0_0_rgba(35,32,28,0.85)];
+}
+@utility card-title {
+  @apply font-head text-lg uppercase tracking-wide text-cherry;
+}
+@utility btn {
+  @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border-2 border-ink px-3 py-1.5 text-sm font-semibold
+    shadow-[2px_2px_0_0_rgba(35,32,28,0.9)] transition active:translate-x-[1px] active:translate-y-[1px] active:shadow-none
+    disabled:cursor-not-allowed disabled:opacity-50;
+}
+@utility btn-primary {
+  @apply btn bg-cherry text-white hover:bg-cherry-dark;
+}
+@utility btn-mint {
+  @apply btn bg-mint text-ink hover:bg-mint-dark hover:text-white;
+}
+@utility btn-ghost {
+  @apply btn bg-white text-ink hover:bg-cream-dark;
+}
+@utility btn-sm {
+  @apply px-2 py-1 text-xs;
+}
+@utility input {
+  @apply w-full rounded-lg border-2 border-ink/70 bg-white px-3 py-1.5 text-sm outline-none focus:border-cherry focus:ring-2 focus:ring-cherry/20;
+}
+@utility label {
+  @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-muted;
+}
+@utility badge {
+  @apply inline-flex items-center gap-1 rounded-full border border-ink/40 px-2 py-0.5 text-xs font-medium;
+}
+
+/* Bảng storyboard: chữ prompt dễ đọc, dễ chọn. */
+.prompt-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

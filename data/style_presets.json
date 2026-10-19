@@ -1,0 +1,22 @@
+{
+  "kodachrome": {
+    "name": "Kodachrome 35mm (mặc định)",
+    "text": "Shot on 35mm Kodachrome film, 1950s America, warm saturated pastel colors, soft film grain, gentle vignette, cinematic lighting, nostalgic mood, 24fps",
+    "short": "35mm Kodachrome film, 1950s America, warm pastel colors, soft film grain, 24fps"
+  },
+  "technicolor": {
+    "name": "Technicolor musical",
+    "text": "Three-strip Technicolor look of a 1950s Hollywood musical, vivid saturated primary colors, glossy studio lighting, soft diffusion glow, fine film grain, 24fps",
+    "short": "1950s Technicolor musical look, vivid primary colors, glossy studio light, 24fps"
+  },
+  "noir": {
+    "name": "Black & white noir",
+    "text": "Black-and-white 1950s film noir, high-contrast chiaroscuro lighting, deep shadows, silver halide film grain, 35mm, 24fps",
+    "short": "Black-and-white 1950s film noir, high contrast, film grain, 24fps"
+  },
+  "home8mm": {
+    "name": "Faded home-movie 8mm",
+    "text": "Faded 8mm home-movie footage from the 1950s, washed-out warm colors, heavy grain, light leaks, slight gate weave and flicker, soft edges",
+    "short": "Faded 1950s 8mm home movie, washed-out warm colors, heavy grain, light leaks"
+  }
+}
