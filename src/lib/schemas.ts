@@ -52,6 +52,31 @@ export const zEditOptions = z.object({
   fadeIn: z.number().min(0).max(10),
   fadeOut: z.number().min(0).max(10),
   seed: z.number().int().min(0).max(1_000_000),
+  quality: z.enum(["youtube", "fast"]),
+  loudness: z.object({ enabled: z.boolean(), target_lufs: z.number().min(-30).max(-9), true_peak_dbtp: z.number().min(-6).max(-1) }),
+  logo: z.object({
+    position: z.enum(["top-left", "top-right", "bottom-left", "bottom-right"]),
+    size_percent: z.number().min(2).max(50),
+    opacity_percent: z.number().min(10).max(100),
+    margin_percent: z.number().min(0).max(20),
+    shape: z.enum(["original", "circle"]),
+    start_seconds: z.number().min(0).max(3600),
+  }),
+  intro: z.object({
+    enabled: z.boolean(),
+    title: z.string().max(100),
+    subtitle: z.string().max(100),
+    seconds: z.number().min(2).max(30),
+    background_blur: z.boolean(),
+    blur_percent: z.number().min(5).max(100),
+  }),
+  metadata: z.object({
+    title: z.string().max(200),
+    artist: z.string().max(200),
+    genre: z.string().max(100),
+    year: z.string().max(10),
+    comment: z.string().max(4000),
+  }),
 });
 
 const forbidden = z.object({

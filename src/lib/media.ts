@@ -6,7 +6,8 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { detectBeats } from "./beats";
 import { UserError } from "./errors";
-import { DEFAULT_EDIT_OPTIONS } from "./edit";
+import { DEFAULT_EDIT_OPTIONS, mergeEditOptions } from "./edit";
+import { FONT_EXTENSIONS, LOGO_EXTENSIONS } from "./branding";
 import { decodeMono, probe, renderWaveform } from "./ffmpeg";
 import { MEDIA_DIR, SAFE_ID, withLock } from "./store";
 import type { AudioTrack, EditOptions, MediaFile, VideoProject } from "./types";
@@ -15,6 +16,8 @@ export const VIDEO_EXT = [".mp4", ".mov", ".webm", ".mkv", ".m4v"];
 export const AUDIO_EXT = [".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"];
 const MAX_CLIP_BYTES = 1024 ** 3;
 const MAX_AUDIO_BYTES = 300 * 1024 ** 2;
+const MAX_IMAGE_BYTES = 20 * 1024 ** 2;
+const MAX_FONT_BYTES = 50 * 1024 ** 2;
 const SAFE_FILE = /^[a-z0-9][a-z0-9._-]{0,150}$/i;
 const SAMPLE_RATE = 11025;
 
@@ -34,13 +37,13 @@ export function mediaPath(mvId: string, file: string): string {
 const projectFile = (mvId: string) => path.join(mediaDir(mvId), "project.json");
 
 function emptyProject(mvId: string): VideoProject {
-  return { mv_id: mvId, audio: null, clips: {}, options: { ...DEFAULT_EDIT_OPTIONS }, renders: [], updated_at: new Date().toISOString() };
+  return { mv_id: mvId, audio: null, clips: {}, logo: null, font: null, options: mergeEditOptions(DEFAULT_EDIT_OPTIONS), renders: [], updated_at: new Date().toISOString() };
 }
 
 export async function loadProject(mvId: string): Promise<VideoProject> {
   try {
     const p = JSON.parse(await fs.readFile(projectFile(mvId), "utf8")) as VideoProject;
-    return { ...emptyProject(mvId), ...p, options: { ...DEFAULT_EDIT_OPTIONS, ...p.options } };
+    return { ...emptyProject(mvId), ...p, options: mergeEditOptions(p.options) };
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return emptyProject(mvId);
     throw new Error(`Không đọc được dữ liệu dựng video: ${(err as Error).message}`);
@@ -127,6 +130,7 @@ export async function addAudio(mvId: string, name: string, body: ReadableStream<
       name,
       size,
       duration: info.duration,
+      channels: info.channels ?? undefined,
       uploaded_at: new Date().toISOString(),
       bpm: beat && beat.confidence >= 0.15 ? beat.bpm : null,
       bpm_source: "auto",
@@ -181,6 +185,7 @@ export async function addClip(mvId: string, shotNo: number, name: string, body: 
       duration: info.duration,
       width: info.video.width,
       height: info.video.height,
+      color_matrix: info.video.matrix,
       uploaded_at: new Date().toISOString(),
     };
     return await updateProject(mvId, async (p) => {
@@ -191,6 +196,41 @@ export async function addClip(mvId: string, shotNo: number, name: string, body: 
     await removeFile(mvId, file);
     throw err;
   }
+}
+
+/** Logo kênh (ảnh) hoặc font chữ cho intro. */
+export async function addAsset(mvId: string, kind: "logo" | "font", name: string, body: ReadableStream<Uint8Array>): Promise<VideoProject> {
+  const ext = extOf(name, kind === "logo" ? LOGO_EXTENSIONS : FONT_EXTENSIONS, kind === "logo" ? "Logo" : "Font chữ");
+  const file = `${kind}-${stamp()}${ext}`;
+  const abs = mediaPath(mvId, file);
+  const size = await receive(body, abs, kind === "logo" ? MAX_IMAGE_BYTES : MAX_FONT_BYTES);
+  try {
+    let width: number | undefined;
+    let height: number | undefined;
+    if (kind === "logo") {
+      const info = await probe(abs).catch(() => null);
+      if (!info?.video) throw new UploadError(`"${name}" không phải ảnh đọc được.`);
+      ({ width, height } = info.video);
+    } else {
+      const { readFontInfo } = await import("./fonts");
+      if (!readFontInfo(await fs.readFile(abs))) throw new UploadError(`"${name}" không phải font TrueType/OpenType đọc được.`);
+    }
+    const asset: MediaFile = { file, name, size, duration: 0, width, height, uploaded_at: new Date().toISOString() };
+    return await updateProject(mvId, async (p) => {
+      await removeFile(mvId, p[kind]?.file);
+      return { ...p, [kind]: asset };
+    });
+  } catch (err) {
+    await removeFile(mvId, file);
+    throw err;
+  }
+}
+
+export function removeAsset(mvId: string, kind: "logo" | "font"): Promise<VideoProject> {
+  return updateProject(mvId, async (p) => {
+    await removeFile(mvId, p[kind]?.file);
+    return { ...p, [kind]: null };
+  });
 }
 
 export function removeClip(mvId: string, shotNo: number): Promise<VideoProject> {
@@ -238,5 +278,11 @@ export function removeRender(mvId: string, file: string): Promise<VideoProject> 
 
 /** Tổng dung lượng nhạc + clip + video đã dựng của MV. */
 export function projectBytes(p: VideoProject): number {
-  return (p.audio?.size ?? 0) + Object.values(p.clips).reduce((a, c) => a + c.size, 0) + p.renders.reduce((a, r) => a + r.size, 0);
+  return (
+    (p.audio?.size ?? 0) +
+    (p.logo?.size ?? 0) +
+    (p.font?.size ?? 0) +
+    Object.values(p.clips).reduce((a, c) => a + c.size, 0) +
+    p.renders.reduce((a, r) => a + r.size, 0)
+  );
 }

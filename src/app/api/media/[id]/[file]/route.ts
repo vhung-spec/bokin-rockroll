@@ -17,6 +17,10 @@ const TYPES: Record<string, string> = {
   ".ogg": "audio/ogg",
   ".opus": "audio/ogg",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
 };
 
 type Ctx = { params: Promise<{ id: string; file: string }> };

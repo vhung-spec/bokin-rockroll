@@ -52,6 +52,8 @@ function requireFfmpeg(): string {
 
 export interface RunOptions {
   signal?: AbortSignal;
+  /** Thư mục làm việc của ffmpeg (font / file chữ được gọi bằng tên tương đối, không cần escape). */
+  cwd?: string;
   /** Gọi với từng dòng ffmpeg in ra stdout (dùng với -progress pipe:1). */
   onStdoutLine?: (line: string) => void;
   /** Gom stdout thành Buffer (dùng khi giải mã âm thanh ra PCM). */
@@ -69,7 +71,7 @@ export function runFfmpeg(args: string[], opts: RunOptions = {}): Promise<RunRes
   const bin = requireFfmpeg();
   return new Promise((resolve, reject) => {
     if (opts.signal?.aborted) return reject(new FfmpegError("Đã huỷ."));
-    const child = spawn(/*turbopackIgnore: true*/ bin, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    const child = spawn(/*turbopackIgnore: true*/ bin, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, cwd: opts.cwd });
     opts.onSpawn?.(child);
     const out: Buffer[] = [];
     let err = "";
@@ -111,10 +113,26 @@ export async function ffmpegOrThrow(args: string[], what: string, opts: RunOptio
   return res;
 }
 
+const filterCache = new Map<string, boolean>();
+
+/** Bản ffmpeg đang dùng có bộ lọc này không (vd. subtitles cần libass, drawtext cần libfreetype). */
+export async function hasFilter(name: string): Promise<boolean> {
+  const key = `${findFfmpeg().path}|${name}`;
+  const known = filterCache.get(key);
+  if (known !== undefined) return known;
+  const res = await runFfmpeg(["-hide_banner", "-h", `filter=${name}`], { collectStdout: true });
+  const text = res.stdout.toString("utf8") + res.stderr;
+  const ok = res.code === 0 && new RegExp(`Filter ${name}\\b`).test(text);
+  filterCache.set(key, ok);
+  return ok;
+}
+
 export interface ProbeResult {
   duration: number;
-  video: { width: number; height: number; fps: number | null } | null;
+  video: { width: number; height: number; fps: number | null; codec: string; matrix: "bt601" | "bt709" } | null;
   audio: boolean;
+  audioCodec: string | null;
+  channels: number | null;
 }
 
 function parseClock(s: string): number {
@@ -128,12 +146,26 @@ export function parseProbe(stderr: string): ProbeResult {
   const streams = stderr.split(/\r?\n/).filter((l) => /^\s*Stream #\d+:\d+/.test(l));
   // Ảnh bìa (attached pic) trong file nhạc không tính là video.
   const videoLine = streams.find((l) => /: Video: /.test(l) && !/\(attached pic\)/.test(l));
+  const audioLine = streams.find((l) => /: Audio: /.test(l));
   const size = videoLine ? /\b(\d{2,5})x(\d{2,5})\b/.exec(videoLine) : null;
   const fps = videoLine ? /(\d+(?:\.\d+)?) fps/.exec(videoLine) : null;
+  const layout = audioLine ? /\b(mono|stereo|(\d+) channels|[2-7]\.[01](?:\(\w+\))?)\b/.exec(audioLine) : null;
+  const channels = !layout ? null : layout[1] === "mono" ? 1 : layout[1] === "stereo" ? 2 : layout[2] ? Number(layout[2]) : Number(layout[1][0]) + Number(layout[1][2]);
   return {
     duration: dur ? parseClock(dur[1]) : NaN,
-    video: size ? { width: Number(size[1]), height: Number(size[2]), fps: fps ? Number(fps[1]) : null } : null,
-    audio: streams.some((l) => /: Audio: /.test(l)),
+    video: size
+      ? {
+          width: Number(size[1]),
+          height: Number(size[2]),
+          fps: fps ? Number(fps[1]) : null,
+          codec: /: Video: (\w+)/.exec(videoLine!)?.[1] ?? "",
+          // Nguồn SD (BT.601) cần đổi ma trận màu khi xuất BT.709 (như Bokin Studio Music).
+          matrix: /\b(bt470bg|smpte170m)\b/.test(videoLine!) ? "bt601" : "bt709",
+        }
+      : null,
+    audio: Boolean(audioLine),
+    audioCodec: audioLine ? (/: Audio: (\w+)/.exec(audioLine)?.[1] ?? "") : null,
+    channels,
   };
 }
 

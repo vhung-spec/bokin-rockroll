@@ -74,9 +74,11 @@ describe("gán clip theo tên file", () => {
 describe("parseProbe", () => {
   it("đọc thời lượng, khung hình, bỏ qua ảnh bìa", () => {
     const clip = `Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'a.mp4':\n  Duration: 00:00:08.04, start: 0.000000, bitrate: 2000 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 1996 kb/s, 24 fps, 24 tbr, 12288 tbn (default)\n  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 128 kb/s (default)`;
-    expect(parseProbe(clip)).toEqual({ duration: 8.04, video: { width: 1280, height: 720, fps: 24 }, audio: true });
+    expect(parseProbe(clip)).toEqual({ duration: 8.04, video: { width: 1280, height: 720, fps: 24, codec: "h264", matrix: "bt709" }, audio: true, audioCodec: "aac", channels: 2 });
+    const sd = clip.replace("yuv420p(progressive)", "yuv420p(tv, smpte170m, progressive)").replace("stereo", "mono");
+    expect(parseProbe(sd)).toMatchObject({ video: { matrix: "bt601" }, channels: 1 });
     const song = `Input #0, mp3, from 's.mp3':\n  Duration: 00:03:05.50, start: 0.025057, bitrate: 320 kb/s\n  Stream #0:0: Audio: mp3, 44100 Hz, stereo, fltp, 320 kb/s\n  Stream #0:1: Video: mjpeg (Baseline), yuvj420p(pc), 600x600 [SAR 1:1 DAR 1:1], 90k tbr, 90k tbn (attached pic)`;
-    expect(parseProbe(song)).toEqual({ duration: 185.5, video: null, audio: true });
+    expect(parseProbe(song)).toEqual({ duration: 185.5, video: null, audio: true, audioCodec: "mp3", channels: 2 });
   });
 });
 

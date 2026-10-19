@@ -53,7 +53,11 @@ beforeAll(async () => {
   spawnSync("mkdir", ["-p", src]);
 }, 60000);
 
-afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+afterAll(() => {
+  // Giữ lại ảnh xem thử để kiểm tra bằng mắt khi cần: KEEP_RENDER_TEST=<thư mục>
+  if (process.env.KEEP_RENDER_TEST) for (const f of ["preview.png", "intro-frame.png"]) if (existsSync(path.join(tmp, f))) cpSync(path.join(tmp, f), path.join(process.env.KEEP_RENDER_TEST, f));
+  rmSync(tmp, { recursive: true, force: true });
+});
 
 describe("ghép video với nhạc", () => {
   it("tải nhạc: đo thời lượng, nhận nhịp 120 BPM, vẽ dạng sóng", async () => {
@@ -113,6 +117,45 @@ describe("ghép video với nhạc", () => {
     expect(p.renders[0].file).toBe(done.output!.file);
     expect(readdirSync(media.mediaDir(mv.id)).some((f) => f.startsWith("tmp-"))).toBe(false);
   }, 180000);
+
+  it("logo + intro + cân bằng âm lượng + thông tin video (chuyển từ Bokin Studio Music)", async () => {
+    const logo = make(["-f", "lavfi", "-i", "color=c=0xc8102e:s=300x300", "-frames:v", "1"], path.join(src, "logo.png"));
+    let p = await media.addAsset(mv.id, "logo", "logo.png", stream(logo));
+    expect(p.logo).toMatchObject({ name: "logo.png", width: 300, height: 300 });
+    await expect(media.addAsset(mv.id, "font", "x.ttf", stream(path.join(src, "fake.mp4")))).rejects.toThrow(/font/);
+    p = await media.setOptions(mv.id, {
+      ...p.options,
+      size: "720p",
+      intro: { ...p.options.intro, enabled: true, subtitle: "Bokin Rock & Roll — Kênh nhạc", seconds: 4 },
+      logo: { ...p.options.logo, shape: "circle", opacity_percent: 90 },
+      metadata: { ...p.options.metadata, artist: "Bokin Rock & Roll" },
+    });
+    const png = await render.previewFrame(mv.id, 2);
+    expect(png.subarray(1, 4).toString()).toBe("PNG");
+    writeFileSync(path.join(tmp, "preview.png"), png);
+
+    await render.startRender(mv.id);
+    const done = await waitJob(mv.id);
+    expect(done.error).toBeUndefined();
+    const out = done.output!;
+    expect(out.quality).toBe("youtube");
+    expect(out.branding).toEqual({ logo: true, intro: true });
+    expect(out.verification).toMatchObject({ passed: true, video_codec: "h264", audio_codec: "aac", expected_frames: out.verification!.video_frames });
+    const L = out.loudness!;
+    expect(L.before.integrated_lufs).not.toBeNull();
+    const last = L.aac_attempts.at(-1)!;
+    expect(last.accepted).toBe(true);
+    expect(last.true_peak_dbtp!).toBeLessThanOrEqual(-1.5 + 0.1);
+    if (L.target_reached) expect(Math.abs(last.integrated_lufs! + 14)).toBeLessThan(1);
+
+    const file = media.mediaPath(mv.id, out.file);
+    const head = spawnSync(bin, ["-hide_banner", "-i", file]).stderr.toString();
+    expect(head).toMatch(/Video: h264 \(High\).*bt709/);
+    expect(head).toMatch(/title\s*: Hollywood Boulevard Summer 1954/);
+    expect(head).toMatch(/artist\s*: Bokin Rock & Roll/);
+    expect(head).toMatch(/Audio: aac.*48000 Hz, stereo/);
+    make(["-ss", "2", "-i", file, "-frames:v", "1"], path.join(tmp, "intro-frame.png"));
+  }, 240000);
 
   it("huỷ giữa chừng, xoá MV thì xoá luôn media", async () => {
     await render.startRender(mv.id);

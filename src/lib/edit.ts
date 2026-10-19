@@ -1,6 +1,8 @@
 // Lập kế hoạch dựng: rải 15–20 clip lên suốt bài hát, lặp lại cảnh theo từng đoạn, cắt theo nhịp.
 // Hàm thuần (không đọc file) — dùng chung cho xem trước trên trình duyệt và lúc dựng thật bằng ffmpeg.
 
+import { DEFAULT_INTRO, DEFAULT_LOGO_LAYOUT, DEFAULT_METADATA } from "./branding";
+import { DEFAULT_LOUDNESS } from "./loudness";
 import { isChorus } from "./structure";
 import type { EditOptions, EditPlan, EditSection, EditSegment, MVResult, SectionType, Tempo, VideoProject } from "./types";
 
@@ -15,7 +17,25 @@ export const DEFAULT_EDIT_OPTIONS: EditOptions = {
   fadeIn: 1,
   fadeOut: 2,
   seed: 0,
+  quality: "youtube",
+  loudness: DEFAULT_LOUDNESS,
+  logo: DEFAULT_LOGO_LAYOUT,
+  intro: DEFAULT_INTRO,
+  metadata: DEFAULT_METADATA,
 };
+
+/** Gộp tuỳ chọn đã lưu với mặc định (cả các nhóm con) — dự án tạo trước khi có tuỳ chọn mới vẫn mở được. */
+export function mergeEditOptions(saved: Partial<EditOptions> | undefined): EditOptions {
+  const d = DEFAULT_EDIT_OPTIONS;
+  return {
+    ...d,
+    ...saved,
+    loudness: { ...d.loudness, ...saved?.loudness },
+    logo: { ...d.logo, ...saved?.logo },
+    intro: { ...d.intro, ...saved?.intro },
+    metadata: { ...d.metadata, ...saved?.metadata },
+  };
+}
 
 export const RENDER_SIZES: Record<EditOptions["size"], { w: number; h: number; label: string }> = {
   "1080p": { w: 1920, h: 1080, label: "1080p ngang (YouTube)" },

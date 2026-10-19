@@ -347,6 +347,10 @@ export interface MediaFile {
   duration: number;
   width?: number;
   height?: number;
+  /** Ma trận màu của clip (bt601 cho nguồn SD / smpte170m) — dùng khi đổi sang BT.709. */
+  color_matrix?: "bt601" | "bt709";
+  /** Số kênh tiếng (bài hát mono được nhân đôi đúng mức, không bị nhỏ đi 3 dB). */
+  channels?: number;
   uploaded_at: string;
 }
 
@@ -382,6 +386,83 @@ export interface EditOptions {
   fadeOut: number;
   /** 0 = theo thứ tự storyboard; số khác = xáo thứ tự lặp. */
   seed: number;
+  /** youtube = theo khuyến nghị upload của YouTube (như Bokin Studio Music); fast = dựng nhanh để xem thử. */
+  quality: QualityPreset;
+  loudness: LoudnessConfig;
+  logo: LogoLayout;
+  intro: IntroConfig;
+  metadata: VideoMetadata;
+}
+
+export type QualityPreset = "youtube" | "fast";
+
+/** Cân bằng âm lượng (theo Bokin Studio Music): đo rồi áp một mức gain cố định, không nén. */
+export interface LoudnessConfig {
+  enabled: boolean;
+  target_lufs: number;
+  true_peak_dbtp: number;
+}
+
+export type LogoPosition = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+/** Cách đặt logo kênh ở góc (file logo nằm trong VideoProject.logo). */
+export interface LogoLayout {
+  position: LogoPosition;
+  size_percent: number;
+  opacity_percent: number;
+  margin_percent: number;
+  shape: "original" | "circle";
+  start_seconds: number;
+}
+
+/** Intro tiêu đề: nền mờ dần từ đen, tiêu đề + dòng phụ hiện rồi tắt (kiểu "title" của Bokin Studio Music). */
+export interface IntroConfig {
+  enabled: boolean;
+  /** Để trống = dùng tên bài hát. */
+  title: string;
+  subtitle: string;
+  seconds: number;
+  background_blur: boolean;
+  blur_percent: number;
+}
+
+/** Thông tin video ghi vào file MP4 (Windows Explorer đọc được). */
+export interface VideoMetadata {
+  title: string;
+  artist: string;
+  genre: string;
+  year: string;
+  comment: string;
+}
+
+export interface LoudnessStats {
+  integrated_lufs: number | null;
+  true_peak_dbtp: number | null;
+}
+
+export interface LoudnessReport {
+  config: LoudnessConfig;
+  before: LoudnessStats;
+  desired_gain_db: number | null;
+  peak_allowed_gain_db: number | null;
+  applied_gain_db: number;
+  peak_limited: boolean;
+  boost_limited: boolean;
+  target_reached: boolean;
+  /** Mỗi lần mã hoá AAC: đỉnh đo trên tiếng đã giải mã, có đạt không. */
+  aac_attempts: { attempt: number; gain_db: number; true_peak_dbtp: number | null; integrated_lufs: number | null; accepted: boolean }[];
+  final_gain_db: number;
+}
+
+export interface Verification {
+  target_seconds: number;
+  video_seconds: number;
+  audio_seconds: number;
+  video_frames: number;
+  expected_frames: number;
+  video_codec: string;
+  audio_codec: string;
+  passed: boolean;
 }
 
 export interface RenderInfo {
@@ -392,6 +473,10 @@ export interface RenderInfo {
   resolution: string;
   segments: number;
   seconds_taken: number;
+  quality?: QualityPreset;
+  loudness?: LoudnessReport | null;
+  verification?: Verification;
+  branding?: { logo: boolean; intro: boolean };
 }
 
 export interface VideoProject {
@@ -399,6 +484,9 @@ export interface VideoProject {
   audio: AudioTrack | null;
   /** Clip theo số cảnh (key = shot_no). */
   clips: Record<string, MediaFile>;
+  /** Logo kênh (ảnh) và font chữ cho intro (không bắt buộc). */
+  logo: MediaFile | null;
+  font: MediaFile | null;
   options: EditOptions;
   renders: RenderInfo[];
   updated_at: string;

@@ -1,14 +1,29 @@
-// Dựng MV hoàn chỉnh bằng ffmpeg: cắt từng đoạn theo kế hoạch → nối lại → ghép nhạc. Chạy nền, có tiến độ và nút huỷ.
+// Dựng MV hoàn chỉnh bằng ffmpeg. Chạy nền, có tiến độ và nút huỷ.
+// Khâu cắt cảnh theo nhịp là của MV Prompt Studio (edit.ts); khâu xuất chuyển từ engine của Bokin Studio Music:
+//   1. Bài hát → FLAC 48 kHz stereo 24-bit (mono được nhân đôi đúng mức).
+//   2. Đo âm lượng (ebur128, true peak) → một mức gain cố định (loudness.ts).
+//   3. Mỗi đoạn cắt được mã hoá với cùng một bộ tham số (SPS/PPS giống nhau, không B-frame) + logo / intro / màu BT.709.
+//   4. AAC: đo lại đỉnh trên tiếng đã giải mã, vượt trần thì giảm gain và mã hoá lại (tối đa 3 lần).
+//   5. Nối hình bằng stream copy + tiếng, ghi thông tin video, kiểm tra đầu ra (thời lượng ±0,1 s, đủ khung hình,
+//      giải mã hết) rồi mới công bố file.
 
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { cleanText, focusPull, introAss, introSpan, introText, logoFilters, metadataArgs, overlapsIntroText, LOGO_FADE_IN, FADE_FROM_BLACK, type TextMode } from "./branding";
 import { RENDER_SIZES, buildEdit, editInputFrom } from "./edit";
 import { exportFileBase } from "./exporters";
-import { FfmpegError, ffmpegOrThrow, findFfmpeg, probe } from "./ffmpeg";
+import { FfmpegError, ffmpegOrThrow, findFfmpeg, hasFilter, probe, type RunOptions } from "./ffmpeg";
+import { defaultFont, readFontInfo } from "./fonts";
+import { EBUR128_FILTER, MAX_AAC_ATTEMPTS, gainDecision, parseEbur128, retryGain, volumeFilter } from "./loudness";
 import { loadProject, mediaDir, mediaPath, updateProject } from "./media";
+import { AUDIO_BITRATE, videoEncoderArgs } from "./quality";
 import { loadMV } from "./store";
-import type { EditOptions, EditPlan, EditSegment, MVResult, RenderInfo, RenderJob, VideoProject } from "./types";
+import type { EditOptions, EditPlan, EditSegment, LoudnessReport, LoudnessStats, MVResult, RenderInfo, RenderJob, Verification, VideoProject } from "./types";
+
+const RATE = 48000;
+/** Sai lệch thời lượng cho phép giữa hình, tiếng và bài hát (như Bokin Studio Music). */
+const TOLERANCE = 0.1;
 
 interface JobState extends RenderJob {
   abort: AbortController;
@@ -40,99 +55,246 @@ export function cancelRender(mvId: string): RenderJob | null {
   return j ? publicJob(j) : null;
 }
 
-/** Bộ lọc hình cho một đoạn: chuẩn khung hình, lật, kéo dài khung cuối nếu clip hụt, mờ dần đầu/cuối. */
-export function segmentFilter(seg: EditSegment, opts: EditOptions, fade: { in: boolean; out: boolean }): string {
-  const { w, h } = RENDER_SIZES[opts.size];
-  const fps = opts.fps;
+// ---------- Hình ----------
+
+/** Mọi thứ quyết định hình ảnh của một lần dựng (giống nhau cho mọi đoạn). */
+export interface Look {
+  w: number;
+  h: number;
+  fps: number;
+  opts: EditOptions;
+  /** Độ dài cả video (giây). */
+  total: number;
+  /** Đường dẫn ảnh logo (null = không có logo). */
+  logo: string | null;
+  title: string;
+  textMode: TextMode;
+  fontFile: string;
+  /** Mờ dần từ đen ở đầu video (intro bật thì ít nhất 1,5 s như Bokin Studio Music). */
+  fadeIn: number;
+}
+
+/** Đoạn có hiệu ứng phụ thuộc thời điểm (không dùng chung bản dựng với đoạn giống hệt ở chỗ khác). */
+function isTimed(seg: EditSegment, look: Look): boolean {
+  const s = seg.start_frame / look.fps;
+  const e = s + seg.frames / look.fps;
+  const { intro, logo } = look.opts;
+  return (
+    s < look.fadeIn ||
+    e > look.total - look.opts.fadeOut ||
+    s < introSpan(intro) ||
+    (look.logo !== null && logo.start_seconds > 0 && s < logo.start_seconds + LOGO_FADE_IN)
+  );
+}
+
+/**
+ * filter_complex cho một đoạn. Input 0 là clip, input 1 (nếu có) là ảnh logo.
+ * Phần chuẩn hoá khung hình theo đoạn; từ `setpts=PTS+start` trở đi mọi hiệu ứng dùng thời gian trên timeline.
+ */
+export function segmentGraph(seg: EditSegment, matrix: "bt601" | "bt709", look: Look): { graph: string; usesLogo: boolean } {
+  const { w, h, fps, opts } = look;
+  const start = seg.start_frame / fps;
   const dur = seg.frames / fps;
-  const f = [`fps=${fps}`];
-  if (opts.fit === "fill") f.push(`scale=${w}:${h}:force_original_aspect_ratio=increase`, `crop=${w}:${h}`);
-  else f.push(`scale=${w}:${h}:force_original_aspect_ratio=decrease:force_divisible_by=2`, `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black`);
-  f.push("setsar=1");
-  if (seg.flip) f.push("hflip");
-  f.push(`tpad=stop_mode=clone:stop_duration=${Math.ceil(dur) + 1}`);
-  if (fade.in && opts.fadeIn > 0) f.push(`fade=t=in:st=0:d=${Math.min(opts.fadeIn, dur / 2).toFixed(3)}`);
-  if (fade.out && opts.fadeOut > 0) {
-    const d = Math.min(opts.fadeOut, dur / 2);
-    f.push(`fade=t=out:st=${(dur - d).toFixed(3)}:d=${d.toFixed(3)}`);
+  const youtube = opts.quality === "youtube";
+  const scaleFlags = youtube ? `:flags=lanczos:in_color_matrix=${matrix}:out_color_matrix=bt709:in_range=auto:out_range=tv` : "";
+  let chain = `[0:v]setpts=PTS-STARTPTS,fps=${fps}`;
+  if (opts.fit === "fill") chain += `,scale=${w}:${h}:force_original_aspect_ratio=increase${scaleFlags},crop=${w}:${h}`;
+  else chain += `,scale=${w}:${h}:force_original_aspect_ratio=decrease:force_divisible_by=2${scaleFlags},pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black`;
+  chain += ",setsar=1";
+  if (seg.flip) chain += ",hflip";
+  chain += `,tpad=stop_mode=clone:stop_duration=${Math.ceil(dur) + 1}`;
+  if (start > 0) chain += `,setpts=PTS+${start.toFixed(6)}/TB`;
+  // Nền mờ trước logo: logo và chữ luôn sắc nét.
+  chain += focusPull(opts.intro, fps, h, start, seg.frames);
+  const logo = look.logo ? logoFilters(opts.logo, 1, w, h, fps, start, seg.frames) : null;
+  if (logo) chain += logo.overlay;
+  if (start < look.fadeIn && look.fadeIn > 0) chain += `,fade=t=in:st=0:d=${look.fadeIn.toFixed(3)}`;
+  if (overlapsIntroText(opts.intro, start, dur)) chain += introText(opts.intro, look.title, w, h, look.textMode, look.fontFile);
+  if (opts.fadeOut > 0 && start + dur > look.total - opts.fadeOut) {
+    chain += `,fade=t=out:st=${Math.max(0, look.total - opts.fadeOut).toFixed(3)}:d=${opts.fadeOut.toFixed(3)}`;
   }
-  f.push("format=yuv420p");
-  return f.join(",");
+  if (start > 0) chain += ",setpts=PTS-STARTPTS";
+  // Bộ mã hoá lấy thông tin màu từ khung hình: gắn BT.709 cho mọi khung (như preset YouTube của Bokin Studio Music).
+  chain += ",format=yuv420p" + (youtube ? ",setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv" : "") + "[out]";
+  return { graph: [...(logo ? [logo.prepare] : []), chain].join(";"), usesLogo: Boolean(logo) };
 }
 
-function segmentArgs(clipFile: string, seg: EditSegment, opts: EditOptions, fade: { in: boolean; out: boolean }, out: string): string[] {
-  return [
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-y",
-    ...(seg.in_point > 0 ? ["-ss", seg.in_point.toFixed(3)] : []),
-    "-i",
-    clipFile,
-    "-vf",
-    segmentFilter(seg, opts, fade),
-    "-frames:v",
-    String(seg.frames),
-    "-an",
-    "-c:v",
-    "libx264",
-    "-preset",
-    "veryfast",
-    "-crf",
-    "20",
-    "-pix_fmt",
-    "yuv420p",
-    "-g",
-    String(opts.fps * 2),
-    "-video_track_timescale",
-    String(opts.fps * 1000),
-    out,
-  ];
+function segmentInputs(clipFile: string, inPoint: number, look: Look, usesLogo: boolean): string[] {
+  return [...(inPoint > 0 ? ["-ss", inPoint.toFixed(3)] : []), "-i", clipFile, ...(usesLogo && look.logo ? ["-i", look.logo] : [])];
 }
 
-function muxArgs(listFile: string, audioFile: string, plan: EditPlan, opts: EditOptions, out: string): string[] {
-  const af: string[] = [];
-  if (opts.fadeIn > 0) af.push(`afade=t=in:st=0:d=${opts.fadeIn}`);
-  if (opts.fadeOut > 0) af.push(`afade=t=out:st=${Math.max(0, plan.duration - opts.fadeOut).toFixed(3)}:d=${opts.fadeOut}`);
-  return [
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-y",
-    "-nostats",
-    "-progress",
-    "pipe:1",
-    "-f",
-    "concat",
-    "-safe",
-    "0",
-    "-i",
-    listFile,
-    "-i",
-    audioFile,
-    "-map",
-    "0:v:0",
-    "-map",
-    "1:a:0",
-    "-c:v",
-    "copy",
-    ...(af.length ? ["-af", af.join(",")] : []),
-    "-c:a",
-    "aac",
-    "-b:a",
-    "192k",
-    "-t",
-    plan.duration.toFixed(3),
-    "-movflags",
-    "+faststart",
-    out,
-  ];
+/** Chép font, viết file chữ / phụ đề intro vào thư mục làm việc (ffmpeg đọc bằng tên tương đối). */
+async function prepareLook(mv: MVResult, project: VideoProject, plan: EditPlan, work: string): Promise<Look> {
+  const opts: EditOptions = { ...project.options };
+  const { w, h } = RENDER_SIZES[opts.size];
+  const intro = opts.intro;
+  const title = cleanText(intro.title || mv.idea.song_title || mv.idea.world_location);
+  let textMode: TextMode = "ass";
+  let fontFile = "";
+  if (intro.enabled) {
+    if (await hasFilter("subtitles")) textMode = "ass";
+    else if (await hasFilter("drawtext")) textMode = "drawtext";
+    else throw new FfmpegError("Bản ffmpeg này không vẽ được chữ (thiếu bộ lọc subtitles/drawtext) — tắt intro tiêu đề hoặc cài ffmpeg đầy đủ.");
+    const source = project.font ? mediaPath(mv.id, project.font.file) : defaultFont();
+    if (!source) throw new FfmpegError("Không tìm thấy font cho intro — hãy tải một file font .ttf/.otf ở phần Intro.");
+    const buf = await fs.readFile(source);
+    const info = readFontInfo(buf);
+    if (!info) throw new FfmpegError("Không đọc được file font của intro — hãy chọn font .ttf/.otf khác.");
+    fontFile = `intro_font${path.extname(source).toLowerCase()}`;
+    await fs.writeFile(path.join(work, fontFile), buf);
+    const sub = { ...intro, subtitle: cleanText(intro.subtitle) };
+    if (textMode === "ass") await fs.writeFile(path.join(work, "intro.ass"), introAss(sub, title, w, h, { name: info.fullName, bold: info.bold }), "utf8");
+    else {
+      await fs.writeFile(path.join(work, "intro_title.txt"), title, "utf8");
+      await fs.writeFile(path.join(work, "intro_subtitle.txt"), sub.subtitle, "utf8");
+    }
+    opts.intro = sub;
+  }
+  return {
+    w,
+    h,
+    fps: opts.fps,
+    opts,
+    total: plan.duration,
+    logo: project.logo ? mediaPath(mv.id, project.logo.file) : null,
+    title,
+    textMode,
+    fontFile,
+    fadeIn: intro.enabled ? Math.max(opts.fadeIn, FADE_FROM_BLACK) : opts.fadeIn,
+  };
 }
 
-async function pool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>, signal: AbortSignal) {
+// ---------- Tiếng ----------
+
+/** Đo loudness / true peak (ebur128): metadata khung cuối ghi ra file tên tương đối trong thư mục làm việc. */
+export async function measureLoudness(file: string, work: string, name: string, run: RunOptions = {}): Promise<LoudnessStats> {
+  const frames = `${name}_ebur128_frames.txt`;
+  const res = await ffmpegOrThrow(
+    ["-hide_banner", "-nostdin", "-v", "info", "-i", path.resolve(file), "-map", "0:a:0", "-vn", "-sn", "-dn", "-af", `${EBUR128_FILTER},ametadata=mode=print:file=${frames}`, "-f", "null", "-"],
+    "Đo âm lượng",
+    { ...run, cwd: work },
+  );
+  let tail = "";
+  try {
+    const buf = await fs.readFile(path.join(work, frames));
+    tail = buf.subarray(Math.max(0, buf.length - 4096)).toString("utf8");
+  } catch {
+    // tiếng ngắn hơn một khung 100 ms: chỉ có phần tổng kết
+  } finally {
+    await fs.rm(path.join(work, frames), { force: true });
+  }
+  return parseEbur128(tail, res.stderr);
+}
+
+interface AudioResult {
+  file: string;
+  report: LoudnessReport | null;
+}
+
+/** Chuẩn bị tiếng (chạy song song với phần dựng hình). `onStage` báo bước đang làm. */
+async function prepareAudio(project: VideoProject, plan: EditPlan, work: string, signal: AbortSignal, onStage: (s: string) => void): Promise<AudioResult> {
+  const opts = project.options;
+  const audio = project.audio!;
+  // 1. Bản lossless chuẩn: 48 kHz, stereo, 24-bit. Mono được nhân đôi nguyên mức (upmix mặc định của FFmpeg nhỏ hơn 3 dB).
+  onStage("chuẩn bị");
+  const lossless = path.join(work, "song.flac");
+  const layout = audio.channels === 1 ? "pan=stereo|c0=c0|c1=c0," : "";
+  await ffmpegOrThrow(
+    ["-hide_banner", "-loglevel", "error", "-y", "-i", mediaPath(project.mv_id, audio.file), "-map", "0:a:0", "-vn", "-sn", "-dn", "-map_metadata", "-1",
+      "-af", `${layout}aresample=${RATE},asetpts=N/SR/TB`, "-ac", "2", "-t", plan.duration.toFixed(6),
+      "-c:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24", lossless],
+    "Chuẩn bị tiếng",
+    { signal },
+  );
+  const loud = opts.loudness;
+  let report: LoudnessReport | null = null;
+  let gain = 0;
+  if (loud.enabled) {
+    onStage("đo âm lượng");
+    const before = await measureLoudness(lossless, work, "song", { signal });
+    const d = gainDecision(before, loud);
+    gain = d.applied_gain_db;
+    report = { config: loud, before, ...d, aac_attempts: [], final_gain_db: gain };
+  }
+  const out = path.join(work, "audio.m4a");
+  const fades: string[] = [];
+  if (opts.fadeIn > 0) fades.push(`afade=t=in:st=0:d=${opts.fadeIn}`);
+  if (opts.fadeOut > 0) fades.push(`afade=t=out:st=${Math.max(0, plan.duration - opts.fadeOut).toFixed(3)}:d=${opts.fadeOut}`);
+  for (let attempt = 1; attempt <= (loud.enabled ? MAX_AAC_ATTEMPTS : 1); attempt++) {
+    onStage(loud.enabled ? `mã hoá AAC lượt ${attempt}` : "mã hoá AAC");
+    const filter = [...(loud.enabled ? [volumeFilter(gain)] : []), ...fades, "asetpts=N/SR/TB"].join(",");
+    await ffmpegOrThrow(
+      ["-hide_banner", "-loglevel", "error", "-y", "-i", lossless, "-af", filter, "-c:a", "aac", "-b:a", AUDIO_BITRATE[opts.quality], out],
+      "Mã hoá tiếng AAC",
+      { signal },
+    );
+    if (!loud.enabled || !report) break;
+    onStage(`kiểm tra đỉnh AAC lượt ${attempt}/${MAX_AAC_ATTEMPTS}`);
+    const measured = await measureLoudness(out, work, `aac_${attempt}`, { signal });
+    let next: number | null;
+    try {
+      next = retryGain(measured.true_peak_dbtp, loud.true_peak_dbtp, gain, attempt);
+    } catch (err) {
+      report.aac_attempts.push({ attempt, gain_db: gain, ...measured, accepted: false });
+      throw new FfmpegError((err as Error).message);
+    }
+    report.aac_attempts.push({ attempt, gain_db: gain, ...measured, accepted: next === null });
+    if (next === null) break;
+    gain = next;
+    report.final_gain_db = gain;
+  }
+  return { file: out, report };
+}
+
+// ---------- Kiểm tra đầu ra ----------
+
+async function decodeStats(file: string, map: string, signal: AbortSignal): Promise<{ frames: number; seconds: number }> {
+  let frames = 0;
+  let us = 0;
+  await ffmpegOrThrow(["-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-i", file, "-map", map, "-f", "null", "-"], "Giải mã kiểm tra", {
+    signal,
+    onStdoutLine: (line) => {
+      const f = /^frame=(\d+)/.exec(line);
+      if (f) frames = Number(f[1]);
+      const t = /^out_time_us=(\d+)/.exec(line);
+      if (t) us = Number(t[1]);
+    },
+  });
+  return { frames, seconds: us / 1e6 };
+}
+
+/** Giải mã toàn bộ hình và tiếng; đúng codec, đủ khung hình, lệch thời lượng ≤ 0,1 s. */
+export async function verifyOutput(file: string, plan: EditPlan, signal: AbortSignal): Promise<Verification> {
+  const info = await probe(file);
+  const video = await decodeStats(file, "0:v:0", signal);
+  const audio = await decodeStats(file, "0:a:0", signal);
+  const videoSeconds = video.frames / plan.fps;
+  const v: Verification = {
+    target_seconds: plan.duration,
+    video_seconds: Math.round(videoSeconds * 1000) / 1000,
+    audio_seconds: Math.round(audio.seconds * 1000) / 1000,
+    video_frames: video.frames,
+    expected_frames: plan.total_frames,
+    video_codec: info.video?.codec ?? "",
+    audio_codec: info.audioCodec ?? "",
+    passed: false,
+  };
+  v.passed =
+    v.video_codec === "h264" &&
+    v.audio_codec === "aac" &&
+    v.video_frames === v.expected_frames &&
+    Math.abs(videoSeconds - plan.duration) <= TOLERANCE + 1e-6 &&
+    Math.abs(audio.seconds - plan.duration) <= TOLERANCE + 1e-6 &&
+    Math.abs(videoSeconds - audio.seconds) <= TOLERANCE + 1e-6;
+  return v;
+}
+
+// ---------- Công việc dựng ----------
+
+async function pool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>, stop: () => boolean) {
   let next = 0;
   const worker = async () => {
-    while (next < items.length && !signal.aborted) await fn(items[next++]);
+    while (next < items.length && !stop()) await fn(items[next++]);
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 }
@@ -148,15 +310,20 @@ function stampName(mv: MVResult): string {
   return `${base}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.mp4`;
 }
 
-/** Bắt đầu dựng (chạy nền). Lỗi kiểm tra đầu vào được ném ra ngay. */
-export async function startRender(mvId: string): Promise<RenderJob> {
-  if (isRendering(mvId)) throw new FfmpegError("MV này đang được dựng — chờ xong hoặc huỷ trước.");
+async function loadInputs(mvId: string) {
   if (!findFfmpeg().ok) throw new FfmpegError("Không tìm thấy ffmpeg — xem hướng dẫn trên trang.");
   const mv = await loadMV(mvId);
   if (!mv) throw new Error("Không tìm thấy MV.");
   const project = await loadProject(mvId);
-  if (!project.audio) throw new FfmpegError("Chưa tải bài hát lên.");
   const plan = buildEdit(editInputFrom(mv, project));
+  return { mv, project, plan };
+}
+
+/** Bắt đầu dựng (chạy nền). Lỗi kiểm tra đầu vào được ném ra ngay. */
+export async function startRender(mvId: string): Promise<RenderJob> {
+  if (isRendering(mvId)) throw new FfmpegError("MV này đang được dựng — chờ xong hoặc huỷ trước.");
+  const { mv, project, plan } = await loadInputs(mvId);
+  if (!project.audio) throw new FfmpegError("Chưa tải bài hát lên.");
   if (!plan.segments.length) throw new FfmpegError("Chưa có clip nào để dựng.");
 
   const job: JobState = {
@@ -175,68 +342,94 @@ export async function startRender(mvId: string): Promise<RenderJob> {
 
 async function runJob(job: JobState, mv: MVResult, project: VideoProject, plan: EditPlan) {
   const signal = job.abort.signal;
-  const opts = project.options;
   const tmp = path.join(mediaDir(mv.id), `tmp-${job.id}`);
   const t0 = Date.now();
   try {
     await fs.mkdir(tmp, { recursive: true });
-    // Đoạn giống hệt nhau (cùng clip, cùng khúc, cùng độ dài) chỉ cần dựng một lần.
-    const last = plan.segments.length - 1;
-    const keyOf = (s: EditSegment, i: number) => `${s.shot_no}|${s.in_point}|${s.frames}|${s.flip}|${i === 0}|${i === last}`;
-    const unique = new Map<string, { seg: EditSegment; index: number; file: string }>();
-    const order = plan.segments.map((s, i) => {
-      const key = keyOf(s, i);
-      if (!unique.has(key)) unique.set(key, { seg: s, index: i, file: `seg-${String(unique.size + 1).padStart(4, "0")}.mp4` });
+    const look = await prepareLook(mv, project, plan, tmp);
+    const opts = look.opts;
+    // Tiếng (FLAC → đo → AAC → kiểm tra đỉnh) chạy song song với phần dựng hình.
+    let audioStage = "chuẩn bị";
+    let audioFailed = false;
+    const audioJob = prepareAudio(project, plan, tmp, signal, (st) => (audioStage = st));
+    audioJob.then(
+      () => (audioStage = "xong"),
+      () => (audioFailed = true),
+    );
+
+    // Đoạn giống hệt nhau (cùng clip, cùng khúc, cùng độ dài, không có hiệu ứng theo thời điểm) chỉ dựng một lần.
+    const keyOf = (s: EditSegment) => `${s.shot_no}|${s.in_point}|${s.frames}|${s.flip}|${isTimed(s, look) ? s.start_frame : ""}`;
+    const unique = new Map<string, { seg: EditSegment; file: string }>();
+    const order = plan.segments.map((s) => {
+      const key = keyOf(s);
+      if (!unique.has(key)) unique.set(key, { seg: s, file: `seg-${String(unique.size + 1).padStart(4, "0")}.mp4` });
       return unique.get(key)!.file;
     });
-
+    const encoder = videoEncoderArgs(opts.quality, look.h, look.fps);
     let done = 0;
     const total = unique.size;
-    job.stage = `Cắt đoạn 0/${total}`;
+    const stage = () => (job.stage = `Dựng đoạn ${done}/${total} · tiếng: ${audioStage}`);
+    stage();
     const threads = Math.max(1, Math.min(3, Math.floor(os.cpus().length / 2)));
     await pool(
       [...unique.values()],
       threads,
-      async ({ seg, index, file }) => {
+      async ({ seg, file }) => {
         const clip = project.clips[String(seg.shot_no)];
+        const { graph, usesLogo } = segmentGraph(seg, clip.color_matrix ?? "bt709", look);
         await ffmpegOrThrow(
-          segmentArgs(mediaPath(mv.id, clip.file), seg, opts, { in: index === 0, out: index === last }, path.join(tmp, file)),
-          `Cắt clip cảnh #${seg.shot_no}`,
-          { signal },
+          ["-hide_banner", "-loglevel", "error", "-y", ...segmentInputs(mediaPath(mv.id, clip.file), seg.in_point, look, usesLogo),
+            "-filter_complex", graph, "-map", "[out]", "-frames:v", String(seg.frames), "-an", "-sn", "-dn", "-map_metadata", "-1",
+            ...encoder, "-video_track_timescale", String(look.fps * 1000), file],
+          `Dựng đoạn cảnh #${seg.shot_no}`,
+          { signal, cwd: tmp },
         );
         done++;
-        job.progress = (done / total) * 0.85;
-        job.stage = `Cắt đoạn ${done}/${total}`;
+        job.progress = (done / total) * 0.9;
+        stage();
       },
-      signal,
+      () => signal.aborted || audioFailed,
     );
     if (signal.aborted) throw new FfmpegError("Đã huỷ.");
+    job.stage = `Hoàn tất tiếng: ${audioStage}`;
+    const audio = await audioJob;
 
-    // Danh sách nối (đường dẫn tương đối, nằm cùng thư mục với file danh sách).
-    const listFile = path.join(tmp, "list.txt");
-    await fs.writeFile(listFile, order.map((f) => `file '${f}'`).join("\n") + "\n", "utf8");
-    job.stage = "Ghép nhạc và xuất file…";
-    const outName = stampName(mv);
+    // Nối hình (stream copy, đường dẫn tương đối trong thư mục làm việc) + tiếng AAC đã kiểm tra.
+    await fs.writeFile(path.join(tmp, "list.txt"), order.map((f) => `file '${f}'`).join("\n") + "\n", "utf8");
+    job.stage = "Ghép hình với tiếng";
     const partial = path.join(tmp, "out.mp4");
-    await ffmpegOrThrow(muxArgs(listFile, mediaPath(mv.id, project.audio!.file), plan, opts, partial), "Ghép video với nhạc", {
-      signal,
-      onStdoutLine: (line) => {
-        const m = /^out_time_(?:us|ms)=(\d+)/.exec(line);
-        if (m) job.progress = 0.85 + 0.15 * Math.min(1, Number(m[1]) / 1e6 / plan.duration);
-      },
-    });
+    const meta = { ...opts.metadata, title: opts.metadata.title || look.title };
+    await ffmpegOrThrow(
+      ["-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", "list.txt", "-i", audio.file,
+        "-map", "0:v:0", "-map", "1:a:0", "-map_metadata", "-1", "-map_chapters", "-1", "-c:v", "copy", "-c:a", "copy",
+        "-t", plan.duration.toFixed(6), ...metadataArgs(meta), "-movflags", "+faststart", partial],
+      "Ghép video với nhạc",
+      { signal, cwd: tmp },
+    );
+    job.progress = 0.94;
+
+    job.stage = "Kiểm tra video (giải mã toàn bộ hình và tiếng)";
+    const verification = await verifyOutput(partial, plan, signal);
+    if (!verification.passed) {
+      throw new FfmpegError(
+        `Video xuất ra không đạt kiểm tra (${verification.video_frames}/${verification.expected_frames} khung hình, hình ${verification.video_seconds}s, tiếng ${verification.audio_seconds}s, cần ${plan.duration.toFixed(2)}s) — không công bố file.`,
+      );
+    }
+    const outName = stampName(mv);
     await fs.rename(partial, mediaPath(mv.id, outName));
     const stat = await fs.stat(mediaPath(mv.id, outName));
-    const info = await probe(mediaPath(mv.id, outName));
-    const { w, h } = RENDER_SIZES[opts.size];
     const output: RenderInfo = {
       file: outName,
       created_at: new Date().toISOString(),
       size: stat.size,
-      duration: info.duration,
-      resolution: `${w}x${h}`,
+      duration: verification.video_seconds,
+      resolution: `${look.w}x${look.h}`,
       segments: plan.segments.length,
       seconds_taken: Math.round((Date.now() - t0) / 1000),
+      quality: opts.quality,
+      loudness: audio.report,
+      verification,
+      branding: { logo: Boolean(look.logo), intro: opts.intro.enabled },
     };
     await updateProject(mv.id, (p) => ({ ...p, renders: [output, ...p.renders] }));
     Object.assign(job, { status: "done", progress: 1, stage: "Xong", output, finished_at: new Date().toISOString() });
@@ -249,6 +442,33 @@ async function runJob(job: JobState, mv: MVResult, project: VideoProject, plan: 
         finished_at: new Date().toISOString(),
       });
     }
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/** Ảnh xem thử một khung hình ở giây `t` với logo / intro / màu như khi dựng (PNG, rộng 960 px). */
+export async function previewFrame(mvId: string, t: number): Promise<Buffer> {
+  const { mv, project, plan } = await loadInputs(mvId);
+  if (!plan.segments.length) throw new FfmpegError("Chưa có clip nào để xem thử.");
+  const time = Math.max(0, Math.min(plan.duration - 1 / plan.fps, t));
+  const frame = Math.floor(time * plan.fps);
+  const seg = plan.segments.find((s) => frame >= s.start_frame && frame < s.start_frame + s.frames) ?? plan.segments[0];
+  const tmp = path.join(mediaDir(mvId), `tmp-preview-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`);
+  await fs.mkdir(tmp, { recursive: true });
+  try {
+    const look = await prepareLook(mv, project, plan, tmp);
+    const offsetFrames = frame - seg.start_frame;
+    const one: EditSegment = { ...seg, start_frame: frame, frames: 1, in_point: seg.in_point + offsetFrames / plan.fps };
+    const { graph, usesLogo } = segmentGraph(one, project.clips[String(seg.shot_no)].color_matrix ?? "bt709", look);
+    const out = path.join(tmp, "preview.png");
+    await ffmpegOrThrow(
+      ["-hide_banner", "-loglevel", "error", "-y", ...segmentInputs(mediaPath(mvId, project.clips[String(seg.shot_no)].file), one.in_point, look, usesLogo),
+        "-filter_complex", `${graph};[out]scale=960:-2[pv]`, "-map", "[pv]", "-frames:v", "1", out],
+      "Xem thử khung hình",
+      { cwd: tmp },
+    );
+    return await fs.readFile(out);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true }).catch(() => undefined);
   }

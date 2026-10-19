@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { UserError } from "@/lib/errors";
 import { findFfmpeg } from "@/lib/ffmpeg";
 import { errorResponse, readJsonBody } from "@/lib/http";
-import { addAudio, addClip, loadProject, projectBytes, removeAudio, removeClip, removeRender, setBpm, setOptions, swapClips } from "@/lib/media";
+import { addAsset, addAudio, addClip, loadProject, projectBytes, removeAsset, removeAudio, removeClip, removeRender, setBpm, setOptions, swapClips } from "@/lib/media";
 import { getJob, isRendering } from "@/lib/render";
 import { zEditOptions } from "@/lib/schemas";
 import { loadMV } from "@/lib/store";
@@ -44,7 +44,7 @@ export async function GET(_req: Request, { params }: Ctx) {
 
 /**
  * Tải lên một file (thân request là nội dung file):
- * ?kind=audio&name=bai-hat.mp3  hoặc  ?kind=clip&shot=3&name=shot-03.mp4
+ * ?kind=audio&name=bai-hat.mp3 · ?kind=clip&shot=3&name=shot-03.mp4 · ?kind=logo&name=logo.png · ?kind=font&name=font.ttf
  */
 export async function PUT(req: Request, { params }: Ctx) {
   try {
@@ -57,14 +57,15 @@ export async function PUT(req: Request, { params }: Ctx) {
     if (!req.body) throw new UserError("Chưa có nội dung file.");
     if (kind === "audio") await addAudio(id, name, req.body);
     else if (kind === "clip") await addClip(id, shotParam(mv, url.searchParams.get("shot")), name, req.body);
-    else throw new UserError("kind phải là audio hoặc clip.");
+    else if (kind === "logo" || kind === "font") await addAsset(id, kind, name, req.body);
+    else throw new UserError("kind phải là audio, clip, logo hoặc font.");
     return NextResponse.json(await state(id));
   } catch (err) {
     return errorResponse(err);
   }
 }
 
-/** Xoá nhạc (?kind=audio), clip của một cảnh (?kind=clip&shot=3) hoặc một bản đã dựng (?kind=render&file=…). */
+/** Xoá nhạc (?kind=audio), clip của một cảnh (?kind=clip&shot=3), logo / font (?kind=logo|font) hoặc một bản đã dựng (?kind=render&file=…). */
 export async function DELETE(req: Request, { params }: Ctx) {
   try {
     const { id } = await params;
@@ -76,6 +77,7 @@ export async function DELETE(req: Request, { params }: Ctx) {
       notWhileRendering(id);
       if (kind === "audio") await removeAudio(id);
       else if (kind === "clip") await removeClip(id, shotParam(mv, url.searchParams.get("shot")));
+      else if (kind === "logo" || kind === "font") await removeAsset(id, kind);
       else throw new UserError("kind không hợp lệ.");
     }
     return NextResponse.json(await state(id));

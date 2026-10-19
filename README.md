@@ -69,7 +69,15 @@ Trên trang kết quả của MV bấm **🎬 Ghép video với nhạc**:
    Xếp sai thì dùng **Chuyển sang…** ở từng cảnh. Mỗi ô cảnh có sẵn nút **Copy prompt** để tạo lại clip còn thiếu.
 3. **Cách dựng**: nhịp cắt (chậm / vừa / nhanh), khung hình (1080p, 720p, dọc 9:16 cho Shorts/TikTok), cắt cho đầy khung hay thêm viền đen,
    24/30 hình/giây, mờ dần đầu/cuối, lật ngang khi lặp, **🎲 Xáo lại** thứ tự lặp. Xem trước ngay trên **timeline** (bấm vào để nghe từ chỗ đó).
-4. Bấm **Dựng video** → xem ngay trên trang và **Tải MP4 về máy**. File cũng nằm trong `data/media/<mã MV>/`.
+4. **Âm thanh, logo & intro** (cách xuất của Bokin Studio Music):
+   - **Cân bằng âm lượng**: Chuẩn YouTube −14 LUFS (mặc định), −18 LUFS (mặc định của Bokin Studio Music), hoặc tắt.
+   - **Chất lượng xuất**: YouTube (đẹp nhất) hoặc Nhanh (để xem thử).
+   - **Logo kênh** ở góc: vị trí, cỡ, độ hiện, lề, cắt tròn, hiện từ giây thứ mấy.
+   - **Intro tiêu đề**: tiêu đề (để trống = tên bài), dòng phụ (vd. tên kênh), độ dài, độ nhoè nền, font riêng (.ttf/.otf) nếu muốn.
+   - **Thông tin video** ghi vào file MP4 (tiêu đề, kênh, thể loại, năm, ghi chú — Windows Explorer đọc được).
+   - **Xem thử khung hình** ở một giây bất kỳ để kiểm tra logo / intro mà không cần dựng cả video.
+5. Bấm **Dựng video** → xem ngay trên trang và **Tải MP4 về máy**. File cũng nằm trong `data/media/<mã MV>/`.
+   Dưới video có báo cáo: âm lượng trước → sau, đỉnh tiếng, và kết quả kiểm tra (đủ khung hình, độ dài hình/tiếng).
 
 App dựng thế nào:
 
@@ -78,10 +86,20 @@ App dựng thế nào:
 - Điệp khúc cắt nhanh (khoảng 2–2,5 giây/nhát), verse ~4 giây, intro/outro giữ lâu hơn. Khi nhận ra nhịp, mọi điểm cắt rơi **đúng phách nhạc**.
 - Các đoạn được giãn theo độ dài thật của bài. Nếu điệp khúc thật bắt đầu ở chỗ khác, mở **Mốc các đoạn trong bài**, phát nhạc và bấm **⏱ Đặt ở đây** đúng lúc đoạn bắt đầu.
 - Tiếng của clip (Veo có tiếng) được tắt — MV chỉ dùng nhạc của bài. Video xuất ra là MP4 H.264 + AAC, xem được trên mọi máy và tải thẳng lên YouTube.
+- **Khâu xuất chuyển từ engine của Bokin Studio Music** (`loop_music/loudness.py`, `quality.py`, `branding.py`, `engine.py`):
+  - Bài hát được chuẩn hoá về 48 kHz stereo 24-bit (bài mono được nhân đôi đúng mức).
+  - Âm lượng được đo bằng ebur128 (true peak), rồi chỉnh bằng **một mức gain cố định** = min(mục tiêu − độ to, −1,5 dBTP − đỉnh, +12 dB) — không nén, không loudnorm.
+  - Sau khi mã hoá AAC, app đo lại đỉnh trên tiếng đã giải mã; vượt trần thì giảm gain và mã hoá lại (tối đa 3 lần).
+  - Preset YouTube: H.264 High, CRF 17, giới hạn bitrate theo bảng upload SDR của YouTube (×1,5), keyframe mỗi nửa giây, không B-frame, đổi màu sang BT.709 (lanczos) và gắn thẻ màu cho mọi khung, AAC 384 kbps.
+  - Logo (mặt nạ tròn, độ hiện, mờ dần) và intro "title" (mờ từ đen 1,5 s, chữ hiện từ 0,6 s, tắt trong giây cuối, nền nhoè rồi rõ dần 1,5 s) giữ đúng thông số của Bokin Studio Music.
+    Chữ được đọc từ file (libass hoặc drawtext) nên không phải escape tên bài.
+  - Trước khi công bố file, app **kiểm tra đầu ra**: giải mã toàn bộ hình và tiếng, đúng H.264 + AAC, đủ số khung hình, độ dài hình và tiếng lệch bài hát không quá 0,1 giây.
+- Phần cắt cảnh theo nhịp và lặp 15–20 cảnh là của MV Prompt Studio — engine của Bokin Studio Music chỉ lặp một video nền dưới danh sách bài, không cắt nhiều clip.
 - Muốn tự dựng trong CapCut / Premiere: bấm **Danh sách cắt (.csv)** để có thời điểm và clip của từng nhát cắt.
 - Cần **ffmpeg**: app tự cài kèm (`ffmpeg-static`) khi chạy file khởi động. Nếu báo thiếu, cài ffmpeg (Windows: `winget install ffmpeg`, macOS: `brew install ffmpeg`)
   hoặc đặt biến môi trường `FFMPEG_PATH` trỏ tới file ffmpeg.
-- Bài 3 phút ở 1080p thường dựng trong 1–3 phút tuỳ máy (720p nhanh hơn).
+- Thời gian dựng (máy thử 4 nhân, bài 3 phút, 20 clip, 1080p): khoảng **2 phút 50 giây** với chất lượng YouTube,
+  khoảng **1 phút 35 giây** với chất lượng Nhanh. 720p nhanh hơn.
 
 ### Cách chạy cho người dùng dòng lệnh
 
@@ -171,7 +189,8 @@ và `data/media/` (nhạc, clip và video đã dựng của từng MV — xoá M
 
 ```bash
 npm test          # unit test (cấu trúc bài hát, parser, era check, ghép prompt, pipeline, chế độ claude.ai, chi phí, gọi Claude giả lập,
-                  #   nhận nhịp, kế hoạch cắt cảnh, dựng MP4 thật bằng ffmpeg từ clip + nhạc tự tạo)
+                  #   nhận nhịp, kế hoạch cắt cảnh, cân bằng âm lượng / preset YouTube / logo / intro,
+                  #   dựng MP4 thật bằng ffmpeg từ clip + nhạc tự tạo)
 npm run typecheck
 ```
 
@@ -200,7 +219,10 @@ src/lib/
   beats.ts              ước tính BPM và vị trí phách từ âm thanh
   clipNames.ts          đoán clip thuộc cảnh nào theo tên file
   media.ts              lưu nhạc / clip của từng MV (data/media/)
-  ffmpeg.ts, render.ts  gọi ffmpeg, dựng MP4 chạy nền (tiến độ, huỷ)
+  ffmpeg.ts, render.ts  gọi ffmpeg, dựng MP4 chạy nền (tiến độ, huỷ, kiểm tra đầu ra)
+  loudness.ts           cân bằng âm lượng (chuyển từ loop_music/loudness.py của Bokin Studio Music)
+  quality.ts            preset YouTube (chuyển từ loop_music/quality.py)
+  branding.ts, fonts.ts logo kênh, intro tiêu đề, thông tin MP4 (chuyển từ loop_music/branding.py, mp4meta.py)
 src/app/                các trang: Nhập ý tưởng, Chạy batch, claude.ai (/manual), Kết quả (/mv/[id]), Ghép video (/mv/[id]/video), Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
 scripts/start.mjs       khởi động một lệnh (dùng bởi Chay-MV-Prompt-Studio.bat / .command)
 tests/                  vitest

@@ -5,12 +5,13 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ClipGrid, { VIDEO_ACCEPT } from "@/components/video/ClipGrid";
 import EditOptionsCard from "@/components/video/EditOptionsCard";
+import ExportStyleCard from "@/components/video/ExportStyleCard";
 import Timeline from "@/components/video/Timeline";
 import { Card, ErrorBox, Spinner } from "@/components/ui";
 import { api, exportUrl, formatBytes, formatClock, mediaUrl, uploadFile } from "@/lib/client";
 import { assignClipFiles } from "@/lib/clipNames";
 import { RENDER_SIZES, autoSectionStarts, buildEdit, editInputFrom } from "@/lib/edit";
-import type { EditOptions, EditPlan, MVResult, RenderJob, VideoProject } from "@/lib/types";
+import type { EditOptions, EditPlan, LoudnessReport, MVResult, RenderJob, Verification, VideoProject } from "@/lib/types";
 
 interface MediaState {
   project: VideoProject;
@@ -176,11 +177,31 @@ export default function VideoPage() {
     void audioRef.current?.play();
   };
 
+  /** Lưu ngay các tuỳ chọn chưa lưu (trước khi dựng / xem thử). */
+  async function flushOptions() {
+    if (options && JSON.stringify(options) !== savedOptions.current) {
+      const snapshot = JSON.stringify(options);
+      const s = await api<MediaState>(base, { method: "PATCH", json: { action: "options", options } });
+      savedOptions.current = snapshot;
+      setSt(s);
+    }
+  }
+
+  async function uploadAsset(kind: "logo" | "font", file: File) {
+    await run(async () => {
+      const label = `${kind === "logo" ? "Logo" : "Font"}: ${file.name}`;
+      setUpload({ label, progress: 0 });
+      try {
+        apply(await uploadFile<MediaState>(`${base}?kind=${kind}&name=${encodeURIComponent(file.name)}`, file, (p) => setUpload({ label, progress: p })), false);
+      } finally {
+        setUpload(null);
+      }
+    });
+  }
+
   async function render() {
     await run(async () => {
-      if (options && JSON.stringify(options) !== savedOptions.current) {
-        apply(await api<MediaState>(base, { method: "PATCH", json: { action: "options", options } }));
-      }
+      await flushOptions();
       const { job } = await api<{ job: RenderJob }>(`/api/mv/${id}/render`, { method: "POST" });
       setSt((s) => (s ? { ...s, job } : s));
     });
@@ -433,8 +454,25 @@ export default function VideoPage() {
         <p className="mt-2 text-xs text-muted">Bấm vào timeline để nghe từ chỗ đó. Rê chuột lên một nhát cắt để thấy cảnh tương ứng ở bước 2.</p>
       </Card>
 
-      {/* 4. Dựng */}
-      <Card title="4. Dựng video">
+      {/* 4. Âm thanh, logo, intro (cách xuất của Bokin Studio Music) */}
+      <ExportStyleCard
+        mvId={mv.id}
+        options={options}
+        onChange={setOptions}
+        logo={project.logo}
+        font={project.font}
+        songTitle={title}
+        busy={busy}
+        onUpload={(kind, file) => void uploadAsset(kind, file)}
+        onRemove={(kind) => run(async () => apply(await api<MediaState>(`${base}?kind=${kind}`, { method: "DELETE" }), false))}
+        onPreview={async (t) => {
+          await flushOptions();
+          return `/api/mv/${id}/preview?t=${t}&v=${Date.now()}`;
+        }}
+      />
+
+      {/* 5. Dựng */}
+      <Card title="5. Dựng video">
         <div className="flex flex-wrap items-center gap-3">
           <button
             className="btn-primary"
@@ -505,6 +543,7 @@ export default function VideoPage() {
                   {formatClock(latest.duration, 0)} · {latest.resolution} · {formatBytes(latest.size)} · dựng trong {latest.seconds_taken}s
                 </span>
               </div>
+              <RenderReport loudness={latest.loudness} verification={latest.verification} />
               <p className="mt-1 text-xs text-muted">
                 File cũng nằm trong thư mục app: <code>data/media/{mv.id}/{latest.file}</code>
               </p>
@@ -537,5 +576,39 @@ export default function VideoPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+const db = (x: number) => `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(1).replace(".", ",")}`;
+
+/** Kết quả cân bằng âm lượng và kiểm tra đầu ra của một bản dựng. */
+function RenderReport({ loudness, verification }: { loudness?: LoudnessReport | null; verification?: Verification }) {
+  if (!loudness && !verification) return null;
+  const last = loudness?.aac_attempts.at(-1);
+  return (
+    <ul className="mt-2 space-y-0.5 text-xs" data-testid="render-report">
+      {loudness && (
+        <li>
+          🔊 Âm lượng:{" "}
+          {loudness.before.integrated_lufs === null ? (
+            "bài quá nhỏ / im lặng, không đo được — giữ nguyên"
+          ) : (
+            <>
+              {db(loudness.before.integrated_lufs)} → {last?.integrated_lufs != null ? db(last.integrated_lufs) : "?"} LUFS (mục tiêu {db(loudness.config.target_lufs)}, gain {db(loudness.final_gain_db)} dB)
+              {loudness.peak_limited && " · bị trần đỉnh giới hạn"}
+              {loudness.boost_limited && " · đã nâng tối đa 12 dB"}
+            </>
+          )}
+          {last?.true_peak_dbtp != null && <> · đỉnh {db(last.true_peak_dbtp)} dBTP</>}
+          {loudness.aac_attempts.length > 1 && <> · mã hoá {loudness.aac_attempts.length} lần để giữ đỉnh dưới trần</>}
+        </li>
+      )}
+      {verification && (
+        <li className={verification.passed ? "text-mint-dark" : "text-cherry-dark"}>
+          {verification.passed ? "✓" : "✗"} Kiểm tra: {verification.video_frames}/{verification.expected_frames} khung hình · hình {verification.video_seconds.toFixed(2).replace(".", ",")}s · tiếng{" "}
+          {verification.audio_seconds.toFixed(2).replace(".", ",")}s · {verification.video_codec.toUpperCase()} + {verification.audio_codec.toUpperCase()}
+        </li>
+      )}
+    </ul>
   );
 }
