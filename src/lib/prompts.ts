@@ -227,6 +227,15 @@ export function buildGenerationPrompt(ctx: GenContext): string {
   out.push("");
   out.push(`SHOT PLAN — produce exactly ${plan.shots.length} shots:`);
   for (const s of plan.shots) out.push(planRow(s));
+  if (ctx.settings.loopScenes) {
+    out.push("");
+    out.push(
+      `LOOPED EDIT: the editor will reuse and repeat these ${plan.shots.length} clips to fill the whole song (a clip may appear several times, in other sections and in any order). ` +
+        "So every shot must stand on its own as a complete, visually distinct moment that still makes sense when repeated or seen out of order; " +
+        "no two shots may look alike; favour iconic, rewatchable moments with smooth continuous motion. Keep the story arc across the plan for the first pass. " +
+        "In editing_notes, add one note with section \"Lặp cảnh\" saying (in Vietnamese, by shot number) which shots to repeat in which sections.",
+    );
+  }
   if (ctx.idea.lyrics?.trim()) {
     out.push("");
     out.push("FULL LYRICS (for mood; lines are already mapped to shots above):");

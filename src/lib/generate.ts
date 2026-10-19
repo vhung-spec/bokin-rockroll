@@ -17,7 +17,7 @@ import {
   type RawGeneration,
   type RawShot,
 } from "./llmSchemas";
-import { mockCouple, mockEditingNotes, mockGenerate, mockLocation, mockShot } from "./mock";
+import { loopNote, mockCouple, mockEditingNotes, mockGenerate, mockLocation, mockShot } from "./mock";
 import { baseLocationName, extractYear, matchLocation } from "./parser";
 import {
   COUPLE_SYSTEM,
@@ -220,6 +220,7 @@ async function buildContext(
     tempo: resolveTempo(idea, theme),
     bpm: idea.bpm ?? null,
     maxShots: settings.maxShots,
+    minShots: settings.minShots,
     sections: settings.songStructure,
     lyrics: idea.lyrics,
     signatureShots: theme.signature_shots,
@@ -396,6 +397,12 @@ function finalizeIssues(mv: MVResult, settings: Settings, libs: Libraries, histo
   return { ...mv, issues: [...mv.generation_notes, ...validation, ...dupIssues], duplicates };
 }
 
+/** Chế độ lặp cảnh: đảm bảo luôn có ghi chú "Lặp cảnh" (Claude có thể quên). */
+function withLoopNote(notes: { section: string; note_vi: string }[], ctx: GenContext) {
+  if (!ctx.settings.loopScenes || notes.some((n) => /lặp/i.test(n.section))) return notes;
+  return [...notes, loopNote(ctx.plan)];
+}
+
 // ---------- API chính ----------
 
 export interface GenerateOptions {
@@ -480,7 +487,7 @@ export async function generateMV(idea: IdeaRow, opts: GenerateOptions = {}): Pro
       : "",
     youtube_titles: titles.length >= 3 ? titles : [...titles, ...mockGenerate(ctx).youtube_titles].slice(0, 3),
     youtube_description: raw.youtube_description,
-    editing_notes: raw.editing_notes.length ? raw.editing_notes : mockEditingNotes(ctx.plan),
+    editing_notes: withLoopNote(raw.editing_notes.length ? raw.editing_notes : mockEditingNotes(ctx.plan), ctx),
     generation_notes: notes,
     issues: [],
     duplicates: [],

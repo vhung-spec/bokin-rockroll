@@ -151,8 +151,12 @@ export default function SettingsPage() {
                 onChange={(e) => set("clipLen", e.target.value ? Number(e.target.value) : null)}
               />
             </Field>
-            <Field label="Số cảnh tối đa mỗi MV">
-              <input className="input" type="number" min={1} max={200} value={s.maxShots} onChange={(e) => set("maxShots", Number(e.target.value))} />
+            <Field label="Số cảnh mỗi MV (tối thiểu – tối đa)" hint="Số cảnh = số prompt. Bài dài hơn sẽ dùng lại các cảnh khi dựng.">
+              <div className="flex items-center gap-2">
+                <input className="input" type="number" min={1} max={200} value={s.minShots} onChange={(e) => set("minShots", Number(e.target.value))} />
+                <span>–</span>
+                <input className="input" type="number" min={1} max={200} value={s.maxShots} onChange={(e) => set("maxShots", Number(e.target.value))} />
+              </div>
             </Field>
             <Field label="Thời lượng mặc định (giây)">
               <input className="input" type="number" min={10} max={1200} value={s.defaultDuration} onChange={(e) => set("defaultDuration", Number(e.target.value))} />
@@ -170,6 +174,10 @@ export default function SettingsPage() {
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={s.allowVehicleMakes} onChange={(e) => set("allowVehicleMakes", e.target.checked)} />
                 Cho phép tên hãng/đời xe (vd. 1954 Chevrolet Bel Air)
+              </label>
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={s.loopScenes} onChange={(e) => set("loopScenes", e.target.checked)} />
+                Cảnh sẽ được lặp lại khi dựng (mỗi cảnh độc lập, dùng lại được)
               </label>
             </div>
           </div>

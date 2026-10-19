@@ -29,11 +29,13 @@ beforeAll(async () => {
 afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 
 describe("pipeline (demo)", () => {
-  it("dòng 1: ~20–25 cảnh, nhân vật nhất quán, không sai niên đại", () => {
+  it("dòng 1: 15–20 cảnh (theo cài đặt), nhân vật nhất quán, không sai niên đại", () => {
     const mv = results[0];
     expect(mv.generator).toBe("mock");
-    expect(mv.shots.length).toBeGreaterThanOrEqual(20);
-    expect(mv.shots.length).toBeLessThanOrEqual(25);
+    expect(mv.shots.length).toBeGreaterThanOrEqual(15);
+    expect(mv.shots.length).toBeLessThanOrEqual(20);
+    expect(mv.editing_notes.some((n) => n.section === "Lặp cảnh")).toBe(true);
+    for (const r of results) expect(r.shots.length).toBeLessThanOrEqual(20);
     expect(mv.location_key).toBe("Hollywood Boulevard");
     expect(mv.year).toBe(1954);
     const he = mv.character_bible.characters.find((c) => c.id === "HE")!;

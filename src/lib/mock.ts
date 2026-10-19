@@ -98,7 +98,7 @@ const T: Record<string, Template[]> = {
     { core: (p) => `{{HE}} and {{SHE}} bop to the music beside ${p.prop(1)}, shoulders bouncing and fingers snapping, quick push-in on the beat, playful energy`, vi: "Hai người lắc lư theo nhạc, búng tay theo nhịp.", camera: "quick push-in on the beat", motion: true, sizes: ["medium"] },
     { core: (p) => `{{HE}} slides across the floor on his knees toward {{SHE}}, who claps and laughs, ${p.light}, low-angle dolly, cheeky showmanship`, vi: "Chàng trai trượt quỳ gối trên sàn về phía cô gái, cô vỗ tay cười.", camera: "low-angle dolly", motion: true, sizes: ["medium", "wide"] },
     { core: (p) => `{{SHE}} spins in place so her skirt flares into a perfect circle, ${p.landmark(0)} whirling behind her, overhead camera turning with her, pure delight`, vi: "Cô gái xoay tròn, váy xoè thành vòng tròn hoàn hảo.", camera: "overhead spin", motion: true, sizes: ["medium", "wide"] },
-    { core: (p) => `a crowd of young dancers joins {{HE}} and {{SHE}} in a synchronized hand jive-style routine of claps and kicks near ${p.landmark(1)}, ${p.light}, crane sweeping over the dancers, infectious energy`, vi: "Đám đông nhập cuộc nhảy cùng hai người, vỗ tay và đá chân đồng loạt.", camera: "crane sweep", motion: true, sizes: ["wide"] },
+    { core: (p) => `a crowd of young dancers joins {{HE}} and {{SHE}} in a synchronized routine of claps, kicks and spins near ${p.landmark(1)}, ${p.light}, crane sweeping over the dancers, infectious energy`, vi: "Đám đông nhập cuộc nhảy cùng hai người, vỗ tay và đá chân đồng loạt.", camera: "crane sweep", motion: true, sizes: ["wide"] },
   ],
   chorus: [
     { core: () => `{{HE}} and {{SHE}} face each other on the sidewalk as the crowd around them fades into soft blur and freezes, only they move, slow orbit, time stops`, vi: "Hai người đối diện nhau, đám đông xung quanh nhoè đi và đứng yên.", camera: "slow orbit", sizes: ["medium", "wide"] },
@@ -226,8 +226,24 @@ export function mockShot(ctx: GenContext, slot: PlannedShot, variant = 0, used?:
   };
 }
 
-export function mockEditingNotes(plan: StructurePlan): { section: string; note_vi: string }[] {
-  return plan.sections.map((s) => {
+/** Gợi ý lặp cảnh khi MV dùng một bộ cảnh cố định rồi lặp lại cho hết bài. */
+export function loopNote(plan: StructurePlan): { section: string; note_vi: string } {
+  const list = (pred: (name: string) => boolean) =>
+    plan.shots
+      .filter((s) => pred(s.section.toLowerCase()))
+      .map((s) => `#${s.shot_no}`)
+      .join(", ");
+  const chorus = list((n) => n.includes("chorus") && !n.includes("pre"));
+  const verse = list((n) => n.includes("verse") || n.includes("pre"));
+  const calm = list((n) => n.includes("intro") || n.includes("bridge") || n.includes("outro"));
+  return {
+    section: "Lặp cảnh",
+    note_vi: `MV dùng ${plan.shots.length} cảnh rồi lặp lại cho hết bài. Mỗi lần điệp khúc dùng lại nhóm cảnh chorus (${chorus}), xen thứ tự khác nhau; các đoạn verse dùng lại ${verse}; đoạn lắng/kết dùng ${calm}. Tránh để cùng một cảnh lặp liền nhau, đổi tốc độ (slow-motion) hoặc lật khung khi dùng lại.`,
+  };
+}
+
+export function mockEditingNotes(plan: StructurePlan, loop = false): { section: string; note_vi: string }[] {
+  const notes = plan.sections.map((s) => {
     const n = s.name.toLowerCase();
     let note = "Cắt theo câu hát, mỗi câu một cảnh; giữ nhịp dựng tự nhiên.";
     if (n.includes("intro")) note = "Fade-in từ đen, giữ cảnh rộng lâu để khán giả 'bước vào' năm của câu chuyện.";
@@ -238,6 +254,7 @@ export function mockEditingNotes(plan: StructurePlan): { section: string; note_v
     else if (n.includes("outro")) note = "Giữ cảnh rộng cuối thật lâu, fade out theo nốt nhạc cuối.";
     return { section: s.name, note_vi: note };
   });
+  return loop ? [...notes, loopNote(plan)] : notes;
 }
 
 /** Sinh toàn bộ MV mẫu, cùng cấu trúc với kết quả của Claude. */
@@ -262,7 +279,7 @@ export function mockGenerate(ctx: GenContext): RawGeneration {
       `${place}, ${ctx.year}: ${song} (Retro 50s Music Video)`,
     ],
     youtube_description: `Imagine turning the dial of an old tabletop radio and landing on a ${ctx.year} evening in ${place}. Neon hums, chrome gleams, and two strangers are about to change each other's summer. "${song}" is a love letter to 1950s America — ${ctx.theme.mood}. Close your eyes, let the doo-wop harmonies carry you back, and fall in love the old-fashioned way.`,
-    editing_notes: mockEditingNotes(ctx.plan),
+    editing_notes: mockEditingNotes(ctx.plan, ctx.settings.loopScenes),
   };
 }
 

@@ -62,6 +62,27 @@ describe("buildStructure", () => {
     checkTimeline(plan);
   });
 
+  it("giới hạn 15–20 cảnh cho mọi độ dài bài / độ dài clip", () => {
+    for (const durationSec of [90, 120, 180, 200, 240, 300]) {
+      for (const clipLen of [6, 8, 10]) {
+        for (const tempo of ["slow", "mid", "fast"] as const) {
+          const plan = buildStructure({ durationSec, clipLen, tempo, minShots: 15, maxShots: 20 });
+          expect(plan.total_shots).toBeGreaterThanOrEqual(15);
+          expect(plan.total_shots).toBeLessThanOrEqual(20);
+          checkTimeline(plan);
+        }
+      }
+    }
+    // bài ngắn được nâng lên tối thiểu, có ghi chú
+    const short = buildStructure({ durationSec: 90, clipLen: 10, tempo: "mid", minShots: 15, maxShots: 20 });
+    expect(short.total_shots).toBe(15);
+    expect(short.notes.join(" ")).toMatch(/tối thiểu 15/);
+    // bài dài bị giới hạn, có ghi chú lặp cảnh
+    const long = buildStructure({ durationSec: 240, clipLen: 8, tempo: "mid", minShots: 15, maxShots: 20 });
+    expect(long.total_shots).toBe(20);
+    expect(long.notes.join(" ")).toMatch(/lặp lại/);
+  });
+
   it("bài rất ngắn với ít cảnh vẫn phủ kín timeline", () => {
     const plan = buildStructure({ durationSec: 30, clipLen: 10, tempo: "mid" });
     expect(plan.total_shots).toBe(3);

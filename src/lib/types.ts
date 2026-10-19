@@ -112,6 +112,9 @@ export interface Settings {
   videoModel: string;
   clipLen: number | null;
   maxShots: number;
+  minShots: number;
+  /** MV sẽ lặp lại các cảnh khi dựng → mỗi cảnh phải độc lập, dùng lại được. */
+  loopScenes: boolean;
   defaultDuration: number;
   stylePreset: string;
   fixedCouple: boolean;

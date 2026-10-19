@@ -27,6 +27,8 @@ export const zSettings = z.object({
   videoModel: z.string().min(1),
   clipLen: z.number().int().min(3).max(30).nullable(),
   maxShots: z.number().int().min(1).max(200),
+  minShots: z.number().int().min(1).max(200),
+  loopScenes: z.boolean(),
   defaultDuration: z.number().int().min(10).max(1200),
   stylePreset: z.string().min(1),
   fixedCouple: z.boolean(),
@@ -37,7 +39,7 @@ export const zSettings = z.object({
   songStructure: z
     .array(z.object({ name: z.string().min(1), ratio: z.number().min(0), role_vi: z.string(), role_en: z.string() }))
     .min(1),
-});
+}).refine((s) => s.minShots <= s.maxShots, { message: "Số cảnh tối thiểu phải ≤ số cảnh tối đa", path: ["minShots"] });
 
 const forbidden = z.object({
   term: z.string().min(1),

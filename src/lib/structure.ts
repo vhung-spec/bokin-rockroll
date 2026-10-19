@@ -31,6 +31,8 @@ export interface StructureInput {
   tempo: Tempo;
   bpm?: number | null;
   maxShots?: number | null;
+  /** Số cảnh tối thiểu (vd. MV dùng 15–20 cảnh rồi lặp lại khi dựng). */
+  minShots?: number | null;
   sections?: SongSection[];
   lyrics?: string | null;
   signatureShots?: string[];
@@ -108,9 +110,16 @@ function cumulativeBounds(weights: number[], duration: number): number[] {
 // Thứ tự ưu tiên giữ đoạn khi số cảnh ít hơn số đoạn.
 const KEEP_PRIORITY = ["intro", "chorus 1", "final chorus", "verse 1", "outro", "bridge", "chorus 2", "verse 2", "pre-chorus"];
 
-function allocateShotCounts(sections: { name: string; duration: number; clip: number }[], maxShots?: number | null) {
+function allocateShotCounts(
+  sections: { name: string; duration: number; clip: number }[],
+  maxShots?: number | null,
+  minShots?: number | null,
+  duration = Infinity,
+) {
   const ideal = sections.map((s) => (s.duration > 0 ? s.duration / s.clip : 0));
   let target = Math.ceil(ideal.reduce((a, b) => a + b, 0) - 1e-9);
+  // Mỗi cảnh phải dài ít nhất 1 giây nên số cảnh tối thiểu không vượt quá thời lượng.
+  if (minShots && minShots > 0) target = Math.max(target, Math.min(Math.floor(minShots), duration));
   if (maxShots && maxShots > 0) target = Math.min(target, Math.floor(maxShots));
   target = Math.max(1, target);
   const nonEmpty = sections.filter((s) => s.duration > 0).length;
@@ -318,7 +327,7 @@ export function buildStructure(input: StructureInput): StructurePlan {
     duration: bounds[i + 1] - bounds[i],
     clip: sectionClipLen(s.name, baseClip, input.tempo),
   }));
-  const counts = allocateShotCounts(raw, input.maxShots);
+  const counts = allocateShotCounts(raw, input.maxShots, input.minShots, duration);
 
   // Gộp đoạn không có cảnh vào đoạn liền trước (hoặc liền sau) để timeline liên tục.
   const kept: ((typeof raw)[number] & { count: number })[] = [];
@@ -373,14 +382,19 @@ export function buildStructure(input: StructureInput): StructurePlan {
   const notes: string[] = [];
   const bpm = input.bpm && input.bpm > 0 ? input.bpm : null;
   if (input.tempo === "fast") {
-    notes.push(`Nhịp nhanh: các đoạn chorus dùng clip ~${sectionClipLen("Chorus", baseClip, "fast")}s để cắt dồn dập hơn.`);
+    notes.push(`Nhịp nhanh: các đoạn chorus dùng clip khoảng ${sectionClipLen("Chorus", baseClip, "fast")}s để cắt dồn dập hơn.`);
   }
   if (bpm) {
     const bar = (4 * 60) / bpm;
     notes.push(`BPM ${bpm}: 1 phách ≈ ${(60 / bpm).toFixed(2)}s, 1 ô nhịp (4 phách) ≈ ${bar.toFixed(2)}s — nên cắt cảnh trên phách mạnh.`);
   }
-  if (input.maxShots && shots.length >= input.maxShots) {
-    notes.push(`Đã giới hạn tối đa ${input.maxShots} cảnh; mỗi cảnh sẽ dài hơn độ dài clip mặc định.`);
+  const naturalShots = Math.ceil(duration / baseClip);
+  if (input.maxShots && shots.length >= input.maxShots && naturalShots > input.maxShots) {
+    notes.push(
+      `Giới hạn ${shots.length} cảnh (bài cần khoảng ${naturalShots} clip ${baseClip}s): mỗi cảnh chiếm khoảng ${Math.round(duration / shots.length)}s của bài — lặp lại hoặc kéo dài clip khi dựng.`,
+    );
+  } else if (input.minShots && shots.length > naturalShots) {
+    notes.push(`Đã nâng lên tối thiểu ${shots.length} cảnh; mỗi cảnh chiếm khoảng ${Math.round(duration / shots.length)}s của bài.`);
   }
 
   return {

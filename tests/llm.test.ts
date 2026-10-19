@@ -172,6 +172,9 @@ describe("generateMV qua Claude (giả lập)", () => {
     const sys = (requests[0].body.system as { text: string; cache_control: unknown }[])[0];
     expect(sys.text).toContain("music-video director");
     expect(sys.cache_control).toEqual({ type: "ephemeral" });
+    expect((requests[0].body.messages as any[])[0].content).toContain("LOOPED EDIT");
+    expect(mv.shots.length).toBeLessThanOrEqual(20);
+    expect(mv.editing_notes.some((n) => n.section === "Lặp cảnh")).toBe(true);
     expect((requests[1].body.messages as any[])[0].content).toContain("too long");
     const he = mv.character_bible.characters[0].description;
     for (const s of mv.shots) {
