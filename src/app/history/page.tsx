@@ -32,6 +32,7 @@ export default function HistoryPage() {
   const [series, setSeries] = useState("__all__");
   const [theme, setTheme] = useState("__all__");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [queued, setQueued] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [promptsText, setPromptsText] = useState<string>("");
@@ -161,6 +162,25 @@ export default function HistoryPage() {
               Lấy tất cả prompt
             </button>
             {promptsText && <CopyButton text={promptsText} label={`Copy ${promptsText.split("\n").length} prompt`} className="btn-mint btn-sm" />}
+            <button
+              className="btn-ghost btn-sm"
+              title="Dựng video lần lượt cho các MV đã chọn với thiết lập dựng chung"
+              onClick={async () => {
+                try {
+                  const r = await api<{ added: number }>("/api/render-queue", { method: "POST", json: { action: "add", ids } });
+                  setQueued(`Đã thêm ${r.added} MV vào hàng chờ dựng${r.added < ids.length ? ` (${ids.length - r.added} MV đã có sẵn trong hàng chờ)` : ""}.`);
+                } catch (e) {
+                  setQueued((e as Error).message);
+                }
+              }}
+            >
+              🎬 Thêm vào hàng chờ dựng
+            </button>
+            {queued && (
+              <Link href="/render-queue" className="text-xs text-cherry underline">
+                {queued} Mở hàng chờ →
+              </Link>
+            )}
             <button className="btn-ghost btn-sm ml-auto" onClick={() => setSelected(new Set())}>
               Bỏ chọn
             </button>

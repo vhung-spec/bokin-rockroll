@@ -352,6 +352,8 @@ export interface MediaFile {
   /** Số kênh tiếng (bài hát mono được nhân đôi đúng mức, không bị nhỏ đi 3 dB). */
   channels?: number;
   uploaded_at: string;
+  /** Thư mục chứa file nếu không phải của MV đang dựng (vd. logo trong thiết lập chung "_shared"). */
+  owner?: string;
 }
 
 export interface AudioTrack extends MediaFile {

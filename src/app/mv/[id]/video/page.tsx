@@ -10,11 +10,13 @@ import Timeline from "@/components/video/Timeline";
 import { Card, ErrorBox, Spinner } from "@/components/ui";
 import { api, exportUrl, formatBytes, formatClock, mediaUrl, uploadFile } from "@/lib/client";
 import { assignClipFiles } from "@/lib/clipNames";
-import { RENDER_SIZES, autoSectionStarts, buildEdit, editInputFrom } from "@/lib/edit";
+import { RENDER_SIZES, SHARED_ID, autoSectionStarts, buildEdit, editInputFrom } from "@/lib/edit";
 import type { EditOptions, EditPlan, LoudnessReport, MVResult, RenderJob, Verification, VideoProject } from "@/lib/types";
 
 interface MediaState {
   project: VideoProject;
+  /** Thiết lập dựng dùng chung cho mọi MV. */
+  shared: VideoProject;
   bytes: number;
   ffmpeg: { ok: boolean; version: string | null; source: string | null };
   job: RenderJob | null;
@@ -34,6 +36,7 @@ export default function VideoPage() {
   const [now, setNow] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
   const [noPlay, setNoPlay] = useState<string | null>(null);
+  const [queuedNote, setQueuedNote] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const songInput = useRef<HTMLInputElement>(null);
   const bulkInput = useRef<HTMLInputElement>(null);
@@ -43,10 +46,31 @@ export default function VideoPage() {
   const apply = useCallback((s: MediaState, withOptions = true) => {
     setSt(s);
     if (withOptions) {
-      setOptions(s.project.options);
-      savedOptions.current = JSON.stringify(s.project.options);
+      // Thiết lập thực dùng: bản chung + mốc đoạn riêng của bài này.
+      const effective = { ...s.shared.options, sectionStarts: s.project.options.sectionStarts };
+      setOptions(effective);
+      savedOptions.current = JSON.stringify(effective);
     }
   }, []);
+
+  /** Lưu thiết lập: phần chung → thiết lập chung của mọi MV; mốc đoạn → riêng MV này. */
+  const saveOptions = useCallback(
+    async (next: EditOptions) => {
+      const prev = JSON.parse(savedOptions.current || "null") as EditOptions | null;
+      const snapshot = JSON.stringify(next);
+      const strip = (o: EditOptions | null) => JSON.stringify(o ? { ...o, sectionStarts: null } : null);
+      if (strip(prev) !== strip(next)) {
+        const { shared } = await api<{ shared: VideoProject }>("/api/video-defaults", { method: "PATCH", json: { options: next } });
+        setSt((s) => (s ? { ...s, shared } : s));
+      }
+      if (JSON.stringify(prev?.sectionStarts ?? null) !== JSON.stringify(next.sectionStarts)) {
+        const s = await api<MediaState>(base, { method: "PATCH", json: { action: "sectionStarts", sectionStarts: next.sectionStarts } });
+        setSt((cur) => (cur ? { ...cur, project: s.project } : s));
+      }
+      savedOptions.current = snapshot;
+    },
+    [base],
+  );
 
   useEffect(() => {
     api<MVResult>(`/api/mv/${id}`).then(setMv).catch((e) => setError(e.message));
@@ -56,17 +80,9 @@ export default function VideoPage() {
   // Lưu tuỳ chọn (trễ một chút để không gửi liên tục khi đang gõ).
   useEffect(() => {
     if (!options || JSON.stringify(options) === savedOptions.current) return;
-    const t = setTimeout(() => {
-      const snapshot = JSON.stringify(options);
-      api<MediaState>(base, { method: "PATCH", json: { action: "options", options } })
-        .then((s) => {
-          savedOptions.current = snapshot;
-          setSt(s);
-        })
-        .catch((e) => setError(e.message));
-    }, 500);
+    const t = setTimeout(() => saveOptions(options).catch((e) => setError(e.message)), 500);
     return () => clearTimeout(t);
-  }, [options, base]);
+  }, [options, saveOptions]);
 
   // Theo dõi tiến độ dựng.
   const running = st?.job?.status === "running";
@@ -179,12 +195,7 @@ export default function VideoPage() {
 
   /** Lưu ngay các tuỳ chọn chưa lưu (trước khi dựng / xem thử). */
   async function flushOptions() {
-    if (options && JSON.stringify(options) !== savedOptions.current) {
-      const snapshot = JSON.stringify(options);
-      const s = await api<MediaState>(base, { method: "PATCH", json: { action: "options", options } });
-      savedOptions.current = snapshot;
-      setSt(s);
-    }
+    if (options && JSON.stringify(options) !== savedOptions.current) await saveOptions(options);
   }
 
   async function uploadAsset(kind: "logo" | "font", file: File) {
@@ -192,7 +203,10 @@ export default function VideoPage() {
       const label = `${kind === "logo" ? "Logo" : "Font"}: ${file.name}`;
       setUpload({ label, progress: 0 });
       try {
-        apply(await uploadFile<MediaState>(`${base}?kind=${kind}&name=${encodeURIComponent(file.name)}`, file, (p) => setUpload({ label, progress: p })), false);
+        const { shared } = await uploadFile<{ shared: VideoProject }>(`/api/video-defaults?kind=${kind}&name=${encodeURIComponent(file.name)}`, file, (p) =>
+          setUpload({ label, progress: p }),
+        );
+        setSt((s) => (s ? { ...s, shared } : s));
       } finally {
         setUpload(null);
       }
@@ -462,15 +476,20 @@ export default function VideoPage() {
 
       {/* 4. Âm thanh, logo, intro (cách xuất của Bokin Studio Music) */}
       <ExportStyleCard
-        mvId={mv.id}
+        assetOwner={SHARED_ID}
         options={options}
         onChange={setOptions}
-        logo={project.logo}
-        font={project.font}
+        logo={st.shared.logo}
+        font={st.shared.font}
         songTitle={title}
         busy={busy}
         onUpload={(kind, file) => void uploadAsset(kind, file)}
-        onRemove={(kind) => run(async () => apply(await api<MediaState>(`${base}?kind=${kind}`, { method: "DELETE" }), false))}
+        onRemove={(kind) =>
+          run(async () => {
+            const { shared } = await api<{ shared: VideoProject }>(`/api/video-defaults?kind=${kind}`, { method: "DELETE" });
+            setSt((s) => (s ? { ...s, shared } : s));
+          })
+        }
         onPreview={async (t) => {
           await flushOptions();
           return `/api/mv/${id}/preview?t=${t}&v=${Date.now()}`;
@@ -488,6 +507,23 @@ export default function VideoPage() {
           >
             🎬 Dựng video
           </button>
+          <button
+            className="btn-ghost"
+            disabled={busy}
+            title="Dựng sau, lần lượt cùng các MV khác (thiết lập chung)"
+            onClick={() =>
+              run(async () => {
+                await flushOptions();
+                const r = await api<{ added: number }>("/api/render-queue", { method: "POST", json: { action: "add", ids: [id] } });
+                setQueuedNote(r.added ? "✓ Đã thêm vào hàng chờ dựng." : "MV này đã có trong hàng chờ dựng.");
+              })
+            }
+          >
+            ➕ Thêm vào hàng chờ
+          </button>
+          <Link href="/render-queue" className="text-sm text-cherry underline">
+            {queuedNote ? `${queuedNote} Mở hàng chờ →` : "Hàng chờ dựng →"}
+          </Link>
           <span className="text-sm text-muted">
             {!audio
               ? "Cần tải bài hát trước."

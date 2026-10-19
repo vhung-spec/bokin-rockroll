@@ -21,6 +21,7 @@ let store: typeof import("@/lib/store");
 let mv: MVResult;
 let bin: string;
 
+const SHARED = "_shared";
 const stream = (file: string) => Readable.toWeb(createReadStream(file)) as ReadableStream<Uint8Array>;
 
 function make(args: string[], out: string) {
@@ -98,7 +99,8 @@ describe("ghép video với nhạc", () => {
   }, 60000);
 
   it("dựng ra MP4: đúng thời lượng bài hát, đủ khung hình, có tiếng", async () => {
-    await media.setOptions(mv.id, { ...(await media.loadProject(mv.id)).options, size: "720p", flipRepeats: true, fit: "fit" });
+    // Thiết lập dựng dùng chung cho mọi MV.
+    await media.setOptions(SHARED, { ...(await media.loadProject(SHARED)).options, size: "720p", flipRepeats: true, fit: "fit" });
     const job = await render.startRender(mv.id);
     expect(job.status).toBe("running");
     await expect(render.startRender(mv.id)).rejects.toThrow(/đang được dựng/);
@@ -120,10 +122,10 @@ describe("ghép video với nhạc", () => {
 
   it("logo + intro + cân bằng âm lượng + thông tin video (chuyển từ Bokin Studio Music)", async () => {
     const logo = make(["-f", "lavfi", "-i", "color=c=0xc8102e:s=300x300", "-frames:v", "1"], path.join(src, "logo.png"));
-    let p = await media.addAsset(mv.id, "logo", "logo.png", stream(logo));
+    let p = await media.addAsset(SHARED, "logo", "logo.png", stream(logo));
     expect(p.logo).toMatchObject({ name: "logo.png", width: 300, height: 300 });
-    await expect(media.addAsset(mv.id, "font", "x.ttf", stream(path.join(src, "fake.mp4")))).rejects.toThrow(/font/);
-    p = await media.setOptions(mv.id, {
+    await expect(media.addAsset(SHARED, "font", "x.ttf", stream(path.join(src, "fake.mp4")))).rejects.toThrow(/font/);
+    p = await media.setOptions(SHARED, {
       ...p.options,
       size: "720p",
       intro: { ...p.options.intro, enabled: true, subtitle: "Bokin Rock & Roll — Kênh nhạc", seconds: 4 },

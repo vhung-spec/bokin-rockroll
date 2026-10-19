@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { UserError } from "@/lib/errors";
 import { findFfmpeg } from "@/lib/ffmpeg";
 import { errorResponse, readJsonBody } from "@/lib/http";
-import { addAsset, addAudio, addClip, loadProject, projectBytes, removeAsset, removeAudio, removeClip, removeRender, setBpm, setOptions, swapClips } from "@/lib/media";
+import { SHARED_ID } from "@/lib/edit";
+import { addAudio, addClip, loadProject, projectBytes, removeAudio, removeClip, removeRender, setBpm, setOptions, swapClips } from "@/lib/media";
 import { getJob, isRendering } from "@/lib/render";
 import { zEditOptions } from "@/lib/schemas";
 import { loadMV } from "@/lib/store";
@@ -27,8 +28,9 @@ function shotParam(mv: Awaited<ReturnType<typeof mvOr404>>, raw: unknown): numbe
 
 async function state(id: string) {
   const project = await loadProject(id);
+  const shared = await loadProject(SHARED_ID);
   const ff = findFfmpeg();
-  return { project, bytes: projectBytes(project), ffmpeg: { ok: ff.ok, version: ff.version, source: ff.source }, job: getJob(id) };
+  return { project, shared, bytes: projectBytes(project), ffmpeg: { ok: ff.ok, version: ff.version, source: ff.source }, job: getJob(id) };
 }
 
 /** Trạng thái dựng video của MV: nhạc, clip, tuỳ chọn, các bản đã dựng, ffmpeg, tiến độ. */
@@ -44,7 +46,7 @@ export async function GET(_req: Request, { params }: Ctx) {
 
 /**
  * Tải lên một file (thân request là nội dung file):
- * ?kind=audio&name=bai-hat.mp3 · ?kind=clip&shot=3&name=shot-03.mp4 · ?kind=logo&name=logo.png · ?kind=font&name=font.ttf
+ * ?kind=audio&name=bai-hat.mp3 · ?kind=clip&shot=3&name=shot-03.mp4  (logo / font nằm trong thiết lập chung: /api/video-defaults)
  */
 export async function PUT(req: Request, { params }: Ctx) {
   try {
@@ -57,15 +59,14 @@ export async function PUT(req: Request, { params }: Ctx) {
     if (!req.body) throw new UserError("Chưa có nội dung file.");
     if (kind === "audio") await addAudio(id, name, req.body);
     else if (kind === "clip") await addClip(id, shotParam(mv, url.searchParams.get("shot")), name, req.body);
-    else if (kind === "logo" || kind === "font") await addAsset(id, kind, name, req.body);
-    else throw new UserError("kind phải là audio, clip, logo hoặc font.");
+    else throw new UserError("kind phải là audio hoặc clip.");
     return NextResponse.json(await state(id));
   } catch (err) {
     return errorResponse(err);
   }
 }
 
-/** Xoá nhạc (?kind=audio), clip của một cảnh (?kind=clip&shot=3), logo / font (?kind=logo|font) hoặc một bản đã dựng (?kind=render&file=…). */
+/** Xoá nhạc (?kind=audio), clip của một cảnh (?kind=clip&shot=3) hoặc một bản đã dựng (?kind=render&file=…). */
 export async function DELETE(req: Request, { params }: Ctx) {
   try {
     const { id } = await params;
@@ -77,7 +78,6 @@ export async function DELETE(req: Request, { params }: Ctx) {
       notWhileRendering(id);
       if (kind === "audio") await removeAudio(id);
       else if (kind === "clip") await removeClip(id, shotParam(mv, url.searchParams.get("shot")));
-      else if (kind === "logo" || kind === "font") await removeAsset(id, kind);
       else throw new UserError("kind không hợp lệ.");
     }
     return NextResponse.json(await state(id));
@@ -86,20 +86,24 @@ export async function DELETE(req: Request, { params }: Ctx) {
   }
 }
 
-/** { action: "swap", a, b } | { action: "options", options } | { action: "bpm", bpm: number | null } */
+/** { action: "swap", a, b } | { action: "sectionStarts", sectionStarts } | { action: "bpm", bpm: number | null } */
 export async function PATCH(req: Request, { params }: Ctx) {
   try {
     const { id } = await params;
     const mv = await mvOr404(id);
-    const body = await readJsonBody<{ action: string; a?: number; b?: number; options?: unknown; bpm?: number | null }>(req);
+    const body = await readJsonBody<{ action: string; a?: number; b?: number; sectionStarts?: unknown; bpm?: number | null }>(req);
     switch (body.action) {
       case "swap":
         notWhileRendering(id);
         await swapClips(id, shotParam(mv, body.a), shotParam(mv, body.b));
         break;
-      case "options":
-        await setOptions(id, zEditOptions.parse(body.options));
+      case "sectionStarts": {
+        // Mốc các đoạn là riêng của từng bài; mọi thiết lập khác dùng chung (/api/video-defaults).
+        const starts = zEditOptions.shape.sectionStarts.parse(body.sectionStarts ?? null);
+        const p = await loadProject(id);
+        await setOptions(id, { ...p.options, sectionStarts: starts });
         break;
+      }
       case "bpm": {
         const bpm = body.bpm === null || body.bpm === undefined ? null : Number(body.bpm);
         if (bpm !== null && !(bpm >= 40 && bpm <= 260)) throw new UserError("BPM phải trong khoảng 40–260.");

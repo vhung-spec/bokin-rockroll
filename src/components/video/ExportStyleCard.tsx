@@ -10,7 +10,9 @@ import type { EditOptions, MediaFile, QualityPreset } from "@/lib/types";
 
 /** Âm lượng, chất lượng, logo, intro tiêu đề và thông tin video — cách xuất của Bokin Studio Music. */
 export default function ExportStyleCard({
-  mvId,
+  assetOwner,
+  title = "4. Âm thanh, logo & intro",
+  canPreview = true,
   options,
   onChange,
   logo,
@@ -21,7 +23,11 @@ export default function ExportStyleCard({
   onRemove,
   onPreview,
 }: {
-  mvId: string;
+  /** Thư mục chứa logo / font (thiết lập chung: "_shared"). */
+  assetOwner: string;
+  title?: string;
+  /** false nếu chưa có MV nào đủ clip để xem thử. */
+  canPreview?: boolean;
   options: EditOptions;
   onChange: (o: EditOptions) => void;
   logo: MediaFile | null;
@@ -70,8 +76,11 @@ export default function ExportStyleCard({
   }
 
   return (
-    <Card title="4. Âm thanh, logo & intro">
-      <p className="-mt-1 mb-3 text-xs text-muted">Khâu xuất dùng lại cách làm của Bokin Studio Music: cân bằng âm lượng, chuẩn upload YouTube, logo kênh, intro tiêu đề và thông tin video.</p>
+    <Card title={title}>
+      <p className="-mt-1 mb-3 text-xs text-muted">
+        <b>Dùng chung cho mọi MV</b> — chọn một lần. Khâu xuất dùng lại cách làm của Bokin Studio Music: cân bằng âm lượng, chuẩn upload YouTube, logo kênh,
+        intro tiêu đề và thông tin video. Tiêu đề intro / video để trống thì mỗi MV tự lấy tên bài của mình.
+      </p>
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="space-y-3 rounded-lg border border-ink/15 p-3">
           <h3 className="label">Âm thanh & chất lượng</h3>
@@ -127,7 +136,7 @@ export default function ExportStyleCard({
           {logo ? (
             <div className="flex items-start gap-3">
               <img
-                src={mediaUrl(mvId, logo.file)}
+                src={mediaUrl(assetOwner, logo.file)}
                 alt="logo"
                 className={`h-16 w-16 border border-ink/20 bg-[conic-gradient(#eee_25%,#fff_0_50%,#eee_0_75%,#fff_0)] bg-[length:12px_12px] object-contain ${options.logo.shape === "circle" ? "rounded-full" : "rounded"}`}
               />
@@ -247,10 +256,12 @@ export default function ExportStyleCard({
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-semibold">Xem thử khung hình ở giây</span>
           <input className="input w-20 py-1" type="number" min={0} step={0.5} value={previewAt} onChange={(e) => setPreviewAt(num(e.target.value, 0, 7200, 0))} />
-          <button className="btn-mint btn-sm" onClick={showPreview} disabled={previewBusy || busy} data-testid="preview-frame">
+          <button className="btn-mint btn-sm" onClick={showPreview} disabled={previewBusy || busy || !canPreview} data-testid="preview-frame">
             {previewBusy && <Spinner />} Xem thử
           </button>
-          <span className="text-xs text-muted">Logo, intro, màu và khung hình đúng như khi dựng — không cần dựng cả video.</span>
+          <span className="text-xs text-muted">
+            {canPreview ? "Logo, intro, màu và khung hình đúng như khi dựng — không cần dựng cả video." : "Cần ít nhất một MV đã có clip để xem thử."}
+          </span>
         </div>
         {previewError && <p className="mt-2 text-xs text-cherry-dark">{previewError}</p>}
         {preview && <img src={preview} alt="Xem thử khung hình" className="mt-3 max-h-96 rounded-md border-2 border-ink bg-black" data-testid="preview-image" />}

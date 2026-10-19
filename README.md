@@ -85,6 +85,24 @@ Trên trang kết quả của MV bấm **🎬 Ghép video với nhạc**:
 5. Bấm **Dựng video** → xem ngay trên trang và **Tải MP4 về máy**. File cũng nằm trong `data/media/<mã MV>/`.
    Dưới video có báo cáo: âm lượng trước → sau, đỉnh tiếng, và kết quả kiểm tra (đủ khung hình, độ dài hình/tiếng).
 
+### Dựng nhiều MV một lượt: **Hàng chờ dựng**
+
+Thiết lập ở bước 3–4 (cách ghép, khung hình, chất lượng, âm lượng, logo, font, intro, thông tin video) là **thiết lập chung cho mọi MV** —
+chỉ cần chọn **một lần**, sửa ở trang của MV nào hay ở trang **Hàng chờ dựng** cũng là sửa chung. Tiêu đề intro / tiêu đề video để trống thì mỗi MV
+tự lấy tên bài của mình. Riêng nhạc, clip, BPM và mốc các đoạn (khi cắt theo nhịp) là của từng MV.
+
+Trang **Hàng chờ dựng** (thanh menu trên cùng):
+
+1. **Thiết lập dựng** — xem / sửa thiết lập chung (có nút xem thử khung hình).
+2. **Chọn MV để dựng** — bảng mọi MV với tình trạng bài hát và số clip; **Chọn tất cả MV đủ nhạc + clip** → **Thêm & ▶ chạy ngay**
+   (hoặc chỉ thêm vào hàng chờ rồi chạy sau). MV chưa có nhạc / clip không chọn được — bấm **Tải nhạc / clip** để mở trang của MV đó.
+3. **Hàng chờ** — app dựng **lần lượt từng MV** (mỗi lúc một MV để máy không quá tải), hiện tiến độ của MV đang dựng; xong MV nào có nút **⬇ Tải MP4** ngay.
+   **‖ Dừng sau MV này**, **✖ Huỷ MV đang dựng**, **↻ Dựng lại** mục lỗi / bỏ qua, **Xoá các mục đã xong**. MV thiếu nhạc hoặc clip được **bỏ qua** (ghi rõ lý do)
+   và app dựng tiếp MV sau.
+
+Cũng thêm được MV vào hàng chờ từ trang Ghép video của MV (**➕ Thêm vào hàng chờ**) hoặc từ trang **Lịch sử** (chọn nhiều MV → **🎬 Thêm vào hàng chờ dựng**).
+Hàng chờ được lưu lại (`data/render_queue.json`); nếu tắt app giữa chừng, MV đang dựng dở sẽ quay về hàng chờ — mở app, bấm **▶ Chạy hàng chờ** để tiếp tục.
+
 App dựng thế nào:
 
 - Ghép nguyên clip: các clip nối liền nhau, chuyển clip đúng khung hình; cảnh nào chưa có clip thì bỏ qua và lặp các clip đã có.
@@ -175,7 +193,8 @@ Sửa trên giao diện (trang **Thư viện**) hoặc sửa trực tiếp file 
 | `couples.json` | Cặp đôi cố định đã lưu cho từng series. |
 
 Dữ liệu sinh ra khi chạy (không commit): `data/history/` (lịch sử MV, mỗi MV một file JSON), `data/drafts/` (MV đang chờ câu trả lời từ claude.ai), `data/uploads/` (ảnh tham chiếu nhân vật)
-và `data/media/` (nhạc, clip và video đã dựng của từng MV — xoá MV trong Lịch sử thì thư mục này của MV cũng bị xoá).
+và `data/media/` (nhạc, clip và video đã dựng của từng MV — xoá MV trong Lịch sử thì thư mục này của MV cũng bị xoá;
+`data/media/_shared/` là thiết lập dựng chung, logo và font), `data/render_queue.json` (hàng chờ dựng).
 
 ## 5. Cài đặt đáng chú ý
 
@@ -198,7 +217,7 @@ và `data/media/` (nhạc, clip và video đã dựng của từng MV — xoá M
 
 ```bash
 npm test          # unit test (cấu trúc bài hát, parser, era check, ghép prompt, pipeline, chế độ claude.ai, chi phí, gọi Claude giả lập,
-                  #   nhận nhịp, kế hoạch cắt cảnh, cân bằng âm lượng / preset YouTube / logo / intro,
+                  #   nhận nhịp, kế hoạch cắt cảnh, cân bằng âm lượng / preset YouTube / logo / intro, hàng chờ dựng,
                   #   dựng MP4 thật bằng ffmpeg từ clip + nhạc tự tạo)
 npm run typecheck
 ```
@@ -229,10 +248,12 @@ src/lib/
   clipNames.ts          đoán clip thuộc cảnh nào theo tên file
   media.ts              lưu nhạc / clip của từng MV (data/media/)
   ffmpeg.ts, render.ts  gọi ffmpeg, dựng MP4 chạy nền (tiến độ, huỷ, kiểm tra đầu ra)
+  queue.ts              hàng chờ dựng: dựng lần lượt nhiều MV với thiết lập chung (data/media/_shared)
   loudness.ts           cân bằng âm lượng (chuyển từ loop_music/loudness.py của Bokin Studio Music)
   quality.ts            preset YouTube (chuyển từ loop_music/quality.py)
   branding.ts, fonts.ts logo kênh, intro tiêu đề, thông tin MP4 (chuyển từ loop_music/branding.py, mp4meta.py)
-src/app/                các trang: Nhập ý tưởng, Chạy batch, claude.ai (/manual), Kết quả (/mv/[id]), Ghép video (/mv/[id]/video), Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
+src/app/                các trang: Nhập ý tưởng, Chạy batch, claude.ai (/manual), Kết quả (/mv/[id]), Ghép video (/mv/[id]/video), Hàng chờ dựng (/render-queue),
+                        Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
 scripts/start.mjs       khởi động một lệnh (dùng bởi Chay-MV-Prompt-Studio.bat / .command)
 tests/                  vitest
 ```

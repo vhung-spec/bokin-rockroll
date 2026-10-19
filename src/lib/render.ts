@@ -11,7 +11,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { cleanText, focusPull, introAss, introSpan, introText, logoFilters, metadataArgs, overlapsIntroText, LOGO_FADE_IN, FADE_FROM_BLACK, type TextMode } from "./branding";
-import { RENDER_SIZES, buildEdit, editInputFrom } from "./edit";
+import { RENDER_SIZES, SHARED_ID, applyShared, buildEdit, editInputFrom } from "./edit";
 import { exportFileBase } from "./exporters";
 import { FfmpegError, ffmpegOrThrow, findFfmpeg, hasFilter, probe, type RunOptions } from "./ffmpeg";
 import { defaultFont, readFontInfo } from "./fonts";
@@ -27,13 +27,21 @@ const TOLERANCE = 0.1;
 
 interface JobState extends RenderJob {
   abort: AbortController;
+  /** Xong (thành công, lỗi hay huỷ) khi lần dựng kết thúc. */
+  finished?: Promise<void>;
 }
 
 // Giữ trên globalThis để không mất khi Next.js nạp lại module lúc dev.
 const g = globalThis as unknown as { __mvRenderJobs?: Map<string, JobState> };
 const jobs = (g.__mvRenderJobs ??= new Map());
 
-const publicJob = ({ abort: _abort, ...job }: JobState): RenderJob => job;
+const publicJob = ({ abort: _abort, finished: _finished, ...job }: JobState): RenderJob => job;
+
+/** Chờ lần dựng hiện tại của MV kết thúc, trả về trạng thái cuối. */
+export async function waitRender(mvId: string): Promise<RenderJob | null> {
+  await jobs.get(mvId)?.finished;
+  return getJob(mvId);
+}
 
 export function getJob(mvId: string): RenderJob | null {
   const j = jobs.get(mvId);
@@ -135,7 +143,7 @@ async function prepareLook(mv: MVResult, project: VideoProject, plan: EditPlan, 
     if (await hasFilter("subtitles")) textMode = "ass";
     else if (await hasFilter("drawtext")) textMode = "drawtext";
     else throw new FfmpegError("Bản ffmpeg này không vẽ được chữ (thiếu bộ lọc subtitles/drawtext) — tắt intro tiêu đề hoặc cài ffmpeg đầy đủ.");
-    const source = project.font ? mediaPath(mv.id, project.font.file) : defaultFont();
+    const source = project.font ? mediaPath(project.font.owner ?? mv.id, project.font.file) : defaultFont();
     if (!source) throw new FfmpegError("Không tìm thấy font cho intro — hãy tải một file font .ttf/.otf ở phần Intro.");
     const buf = await fs.readFile(source);
     const info = readFontInfo(buf);
@@ -156,7 +164,7 @@ async function prepareLook(mv: MVResult, project: VideoProject, plan: EditPlan, 
     fps: opts.fps,
     opts,
     total: plan.duration,
-    logo: project.logo ? mediaPath(mv.id, project.logo.file) : null,
+    logo: project.logo ? mediaPath(project.logo.owner ?? mv.id, project.logo.file) : null,
     title,
     textMode,
     fontFile,
@@ -314,7 +322,8 @@ async function loadInputs(mvId: string) {
   if (!findFfmpeg().ok) throw new FfmpegError("Không tìm thấy ffmpeg — xem hướng dẫn trên trang.");
   const mv = await loadMV(mvId);
   if (!mv) throw new Error("Không tìm thấy MV.");
-  const project = await loadProject(mvId);
+  // Thiết lập chung cho mọi MV + nhạc, clip, mốc đoạn riêng của MV này.
+  const project = applyShared(await loadProject(mvId), await loadProject(SHARED_ID));
   const plan = buildEdit(editInputFrom(mv, project));
   return { mv, project, plan };
 }
@@ -336,7 +345,7 @@ export async function startRender(mvId: string): Promise<RenderJob> {
     abort: new AbortController(),
   };
   jobs.set(mvId, job);
-  void runJob(job, mv, project, plan);
+  job.finished = runJob(job, mv, project, plan);
   return publicJob(job);
 }
 

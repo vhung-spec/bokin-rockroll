@@ -20,6 +20,8 @@ const PACES: { value: EditOptions["pace"]; label: string }[] = [
 
 /** Tuỳ chọn dựng + mốc các đoạn trong bài hát. */
 export default function EditOptionsCard({
+  title = "3. Cách dựng",
+  global = false,
   options,
   onChange,
   audio,
@@ -30,6 +32,9 @@ export default function EditOptionsCard({
   onBpm,
   bpmBusy,
 }: {
+  title?: string;
+  /** Sửa thiết lập chung ở trang hàng chờ: ẩn BPM và mốc đoạn (riêng của từng bài). */
+  global?: boolean;
   options: EditOptions;
   onChange: (o: EditOptions) => void;
   audio: AudioTrack | null;
@@ -52,7 +57,11 @@ export default function EditOptionsCard({
   useEffect(() => setBpmText(audio?.bpm ? String(audio.bpm) : ""), [audio?.bpm]);
 
   return (
-    <Card title="3. Cách dựng">
+    <Card title={title}>
+      <p className="-mt-1 mb-3 text-xs text-muted">
+        <b>Dùng chung cho mọi MV</b> — chọn một lần, MV nào dựng (kể cả trong hàng chờ) cũng theo thiết lập này.
+        {!global && " Riêng BPM và mốc các đoạn (khi cắt theo nhịp) là của bài này."}
+      </p>
       <div className="mb-3 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Cách ghép clip">
         {MODES.map((m) => (
           <label
@@ -138,7 +147,12 @@ export default function EditOptionsCard({
         </label>
       </div>
 
-      {!full && (
+      {!full && global && (
+        <p className="mt-4 rounded-lg border border-ink/15 bg-cream/50 p-3 text-xs text-muted">
+          BPM và mốc các đoạn của từng bài chỉnh ở trang “Ghép video” của MV đó (mặc định app tự nhận nhịp và tự chia đoạn).
+        </p>
+      )}
+      {!full && !global && (
         <>
           <div className="mt-4 rounded-lg border border-ink/15 bg-cream/50 p-3">
             <div className="flex flex-wrap items-center gap-3 text-sm">

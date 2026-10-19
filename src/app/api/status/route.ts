@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generationMode } from "@/lib/generate";
 import { hasCredentials } from "@/lib/llm";
+import { readQueue } from "@/lib/queue";
 import { listDrafts, readLibraries, readSettings } from "@/lib/store";
 
 export async function GET() {
@@ -8,6 +9,7 @@ export async function GET() {
   const libs = await readLibraries();
   const profile = libs.videoModels[settings.videoModel];
   const drafts = await listDrafts();
+  const queue = await readQueue();
   return NextResponse.json({
     mode: generationMode(settings),
     engine: settings.engine,
@@ -25,5 +27,8 @@ export async function GET() {
     price: libs.pricing.models?.[settings.model] ?? null,
     usdToVnd: libs.pricing.usd_to_vnd ?? 26000,
     pendingDrafts: drafts.length,
+    /** Số MV đang chờ / đang dựng trong hàng chờ dựng video. */
+    renderQueue: queue.items.filter((i) => i.status === "waiting" || i.status === "running").length,
+    renderQueueRunning: queue.running,
   });
 }

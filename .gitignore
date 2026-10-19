@@ -16,6 +16,7 @@ data/history/
 data/uploads/
 data/drafts/
 data/media/
+data/render_queue.json
 
 # misc
 .DS_Store

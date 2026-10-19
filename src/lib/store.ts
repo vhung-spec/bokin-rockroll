@@ -27,6 +27,8 @@ const HISTORY_DIR = () => dataPath("history");
 export const UPLOAD_DIR = () => dataPath("uploads");
 /** Nhạc, clip và video đã dựng của từng MV: data/media/<mvId>/ */
 export const MEDIA_DIR = () => dataPath("media");
+/** Hàng chờ dựng video. */
+export const QUEUE_FILE = () => dataPath("render_queue.json");
 
 export const LIBRARY_FILES = {
   themes: "themes.json",
@@ -71,7 +73,7 @@ export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T>
   return run;
 }
 
-async function readJson<T>(file: string, fallback: T): Promise<T> {
+export async function readJson<T>(file: string, fallback: T): Promise<T> {
   try {
     return JSON.parse(await fs.readFile(file, "utf8")) as T;
   } catch (err) {
@@ -80,7 +82,7 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
   }
 }
 
-async function writeJson(file: string, data: unknown) {
+export async function writeJson(file: string, data: unknown) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2) + "\n", "utf8");

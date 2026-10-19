@@ -20,6 +20,8 @@ export interface AppStatus {
   price: ModelPrice | null;
   usdToVnd: number;
   pendingDrafts: number;
+  renderQueue: number;
+  renderQueueRunning: boolean;
 }
 
 export const MODE_LABEL: Record<AppStatus["mode"], string> = {

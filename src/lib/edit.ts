@@ -25,6 +25,22 @@ export const DEFAULT_EDIT_OPTIONS: EditOptions = {
   metadata: DEFAULT_METADATA,
 };
 
+/** Thư mục của thiết lập dựng dùng chung cho mọi MV (data/media/_shared). */
+export const SHARED_ID = "_shared";
+
+/**
+ * Thiết lập thực dùng khi dựng một MV: thiết lập chung (chọn một lần cho mọi MV) + những gì riêng của bài
+ * (mốc các đoạn). Logo / font lấy từ thư mục thiết lập chung.
+ */
+export function applyShared(own: VideoProject, shared: Pick<VideoProject, "options" | "logo" | "font">): VideoProject {
+  return {
+    ...own,
+    options: { ...shared.options, sectionStarts: own.options.sectionStarts },
+    logo: shared.logo ? { ...shared.logo, owner: SHARED_ID } : null,
+    font: shared.font ? { ...shared.font, owner: SHARED_ID } : null,
+  };
+}
+
 /** Gộp tuỳ chọn đã lưu với mặc định (cả các nhóm con) — dự án tạo trước khi có tuỳ chọn mới vẫn mở được. */
 export function mergeEditOptions(saved: Partial<EditOptions> | undefined): EditOptions {
   const d = DEFAULT_EDIT_OPTIONS;
