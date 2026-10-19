@@ -10,6 +10,8 @@ Bạn chỉ nhập **ý tưởng** của từng bài (1 dòng), công cụ tự 
 
 Chạy được **hàng loạt** (ví dụ 50 bài một lần) và xuất **XLSX (mỗi MV một sheet)**, CSV, Markdown, TXT, JSON, “Copy tất cả prompt” hoặc **File prompt (.txt)** — chỉ gồm các prompt, mỗi prompt cách nhau một dòng trống.
 
+Khi công cụ tạo video trả clip về, app **ghép clip với nhạc thành MV hoàn chỉnh (MP4)**: tự lặp 15–20 cảnh cho hết bài, cắt đúng phách nhạc (xem mục 2b).
+
 ---
 
 ## 1. Bắt đầu nhanh (không cần biết code)
@@ -56,6 +58,30 @@ Chạy được **hàng loạt** (ví dụ 50 bài một lần) và xuất **XLS
      → dán câu trả lời của Claude vào ô và bấm **Hoàn tất MV**.
 3. Bấm **Mở storyboard** để xem từng MV: mỗi cảnh có nút **Copy prompt**, **Sinh lại cảnh này** (kèm yêu cầu, vd. “góc máy khác”; ở chế độ claude.ai cũng là copy – dán) và **Sửa tay**.
 4. Xuất file: **XLSX** (sheet “Tổng quan” + mỗi MV một sheet), **CSV** (có cột `mv_id`), **MD/TXT** (đọc nhanh), **JSON** (nhập lại được ở trang Lịch sử), **Copy tất cả prompt** (mỗi prompt một dòng), hoặc **File prompt (.txt)**: chỉ gồm các prompt, mỗi prompt cách nhau một dòng trống — tiện nhập hàng loạt vào công cụ tạo video. Có ở trang batch, trang kết quả và Lịch sử (cả theo series).
+
+## 2b. Ghép video với nhạc (ra MP4 hoàn chỉnh)
+
+Trên trang kết quả của MV bấm **🎬 Ghép video với nhạc**:
+
+1. **Bài hát**: chọn hoặc thả file nhạc (MP3, WAV, M4A, FLAC…). App đo độ dài, **nhận nhịp (BPM)** và vẽ dạng sóng âm.
+2. **Clip video**: bấm **Tải nhiều clip một lúc** (hoặc kéo thả cả thư mục). File có số cảnh trong tên — `shot-03.mp4`, `cảnh 3.mov`, `03.mp4` — tự vào đúng cảnh;
+   file không có số (vd. `veo_20261019_101500.mp4`) được xếp **theo thứ tự tên file** vào các cảnh còn trống — nên tải clip về theo đúng thứ tự cảnh.
+   Xếp sai thì dùng **Chuyển sang…** ở từng cảnh. Mỗi ô cảnh có sẵn nút **Copy prompt** để tạo lại clip còn thiếu.
+3. **Cách dựng**: nhịp cắt (chậm / vừa / nhanh), khung hình (1080p, 720p, dọc 9:16 cho Shorts/TikTok), cắt cho đầy khung hay thêm viền đen,
+   24/30 hình/giây, mờ dần đầu/cuối, lật ngang khi lặp, **🎲 Xáo lại** thứ tự lặp. Xem trước ngay trên **timeline** (bấm vào để nghe từ chỗ đó).
+4. Bấm **Dựng video** → xem ngay trên trang và **Tải MP4 về máy**. File cũng nằm trong `data/media/<mã MV>/`.
+
+App dựng thế nào:
+
+- Mỗi đoạn của bài (Intro, Verse, Chorus…) dùng **cảnh của chính đoạn đó**, lặp lại cho tới hết đoạn; đoạn thiếu clip mượn cảnh cùng loại (vd. Chorus 1 ↔ Chorus 2).
+  Không có clip nào bị lặp liền nhau; lần lặp sau lấy **khúc khác** trong clip để đỡ nhàm.
+- Điệp khúc cắt nhanh (khoảng 2–2,5 giây/nhát), verse ~4 giây, intro/outro giữ lâu hơn. Khi nhận ra nhịp, mọi điểm cắt rơi **đúng phách nhạc**.
+- Các đoạn được giãn theo độ dài thật của bài. Nếu điệp khúc thật bắt đầu ở chỗ khác, mở **Mốc các đoạn trong bài**, phát nhạc và bấm **⏱ Đặt ở đây** đúng lúc đoạn bắt đầu.
+- Tiếng của clip (Veo có tiếng) được tắt — MV chỉ dùng nhạc của bài. Video xuất ra là MP4 H.264 + AAC, xem được trên mọi máy và tải thẳng lên YouTube.
+- Muốn tự dựng trong CapCut / Premiere: bấm **Danh sách cắt (.csv)** để có thời điểm và clip của từng nhát cắt.
+- Cần **ffmpeg**: app tự cài kèm (`ffmpeg-static`) khi chạy file khởi động. Nếu báo thiếu, cài ffmpeg (Windows: `winget install ffmpeg`, macOS: `brew install ffmpeg`)
+  hoặc đặt biến môi trường `FFMPEG_PATH` trỏ tới file ffmpeg.
+- Bài 3 phút ở 1080p thường dựng trong 1–3 phút tuỳ máy (720p nhanh hơn).
 
 ### Cách chạy cho người dùng dòng lệnh
 
@@ -121,7 +147,8 @@ Sửa trên giao diện (trang **Thư viện**) hoặc sửa trực tiếp file 
 | `settings.json` | Cài đặt (model, công cụ video, độ dài clip, số cảnh tối thiểu–tối đa, lặp cảnh, cặp đôi cố định, số luồng song song…). |
 | `couples.json` | Cặp đôi cố định đã lưu cho từng series. |
 
-Dữ liệu sinh ra khi chạy (không commit): `data/history/` (lịch sử MV, mỗi MV một file JSON), `data/drafts/` (MV đang chờ câu trả lời từ claude.ai) và `data/uploads/` (ảnh tham chiếu nhân vật).
+Dữ liệu sinh ra khi chạy (không commit): `data/history/` (lịch sử MV, mỗi MV một file JSON), `data/drafts/` (MV đang chờ câu trả lời từ claude.ai), `data/uploads/` (ảnh tham chiếu nhân vật)
+và `data/media/` (nhạc, clip và video đã dựng của từng MV — xoá MV trong Lịch sử thì thư mục này của MV cũng bị xoá).
 
 ## 5. Cài đặt đáng chú ý
 
@@ -143,7 +170,8 @@ Dữ liệu sinh ra khi chạy (không commit): `data/history/` (lịch sử MV,
 ## 7. Dành cho người phát triển
 
 ```bash
-npm test          # unit test (cấu trúc bài hát, parser, era check, ghép prompt, pipeline, chế độ claude.ai, chi phí, gọi Claude giả lập)
+npm test          # unit test (cấu trúc bài hát, parser, era check, ghép prompt, pipeline, chế độ claude.ai, chi phí, gọi Claude giả lập,
+                  #   nhận nhịp, kế hoạch cắt cảnh, dựng MP4 thật bằng ffmpeg từ clip + nhạc tự tạo)
 npm run typecheck
 ```
 
@@ -168,7 +196,12 @@ src/lib/
   exporters.ts, xlsx.ts xuất CSV / MD / TXT / JSON / XLSX
   mock.ts               chế độ demo
   store.ts              đọc/ghi data/
-src/app/                các trang: Nhập ý tưởng, Chạy batch, claude.ai (/manual), Kết quả (/mv/[id]), Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
+  edit.ts               kế hoạch dựng: rải cảnh lên bài hát, lặp cảnh, cắt theo phách (thuần code, dùng cả trên trình duyệt)
+  beats.ts              ước tính BPM và vị trí phách từ âm thanh
+  clipNames.ts          đoán clip thuộc cảnh nào theo tên file
+  media.ts              lưu nhạc / clip của từng MV (data/media/)
+  ffmpeg.ts, render.ts  gọi ffmpeg, dựng MP4 chạy nền (tiến độ, huỷ)
+src/app/                các trang: Nhập ý tưởng, Chạy batch, claude.ai (/manual), Kết quả (/mv/[id]), Ghép video (/mv/[id]/video), Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
 scripts/start.mjs       khởi động một lệnh (dùng bởi Chay-MV-Prompt-Studio.bat / .command)
 tests/                  vitest
 ```

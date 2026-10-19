@@ -93,7 +93,7 @@ export default function MVPage() {
   }
 
   async function remove() {
-    if (!window.confirm("Xoá MV này khỏi lịch sử?")) return;
+    if (!window.confirm("Xoá MV này khỏi lịch sử? Nhạc, clip và video đã dựng của MV này (nếu có) cũng bị xoá.")) return;
     await api(`/api/mv/${mv!.id}`, { method: "DELETE" });
     router.push("/history");
   }
@@ -143,8 +143,11 @@ export default function MVPage() {
           <p className="mt-2 max-w-4xl text-sm text-muted">{mv.idea.outline}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
+          <Link href={`/mv/${mv.id}/video`} className="btn-primary" title="Tải bài hát + các clip đã tạo, app tự ghép thành MV hoàn chỉnh">
+            🎬 Ghép video với nhạc
+          </Link>
           <div className="flex flex-wrap justify-end gap-2">
-            <a className="btn-primary btn-sm" href={exportUrl("xlsx", { ids: [mv.id] })}>
+            <a className="btn-ghost btn-sm" href={exportUrl("xlsx", { ids: [mv.id] })}>
               XLSX
             </a>
             <a className="btn-ghost btn-sm" href={exportUrl("csv", { ids: [mv.id] })}>

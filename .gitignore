@@ -15,6 +15,7 @@ next-env.d.ts
 data/history/
 data/uploads/
 data/drafts/
+data/media/
 
 # misc
 .DS_Store

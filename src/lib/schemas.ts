@@ -41,6 +41,19 @@ export const zSettings = z.object({
     .min(1),
 }).refine((s) => s.minShots <= s.maxShots, { message: "Số cảnh tối thiểu phải ≤ số cảnh tối đa", path: ["minShots"] });
 
+export const zEditOptions = z.object({
+  pace: z.enum(["slow", "normal", "fast"]),
+  snapBeats: z.boolean(),
+  sectionStarts: z.array(z.number().min(0).max(7200)).max(50).nullable(),
+  size: z.enum(["1080p", "720p", "shorts"]),
+  fit: z.enum(["fill", "fit"]),
+  fps: z.union([z.literal(24), z.literal(30)]),
+  flipRepeats: z.boolean(),
+  fadeIn: z.number().min(0).max(10),
+  fadeOut: z.number().min(0).max(10),
+  seed: z.number().int().min(0).max(1_000_000),
+});
+
 const forbidden = z.object({
   term: z.string().min(1),
   patterns: z.array(z.string()).optional(),

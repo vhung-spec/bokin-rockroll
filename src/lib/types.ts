@@ -335,3 +335,119 @@ export interface Draft {
   prompt_built_at?: string;
   prompt_chars?: number;
 }
+
+// ---------- Ghép video với nhạc ----------
+
+/** Một file đã tải lên, lưu trong data/media/<mvId>/. */
+export interface MediaFile {
+  file: string;
+  /** Tên gốc của file người dùng chọn. */
+  name: string;
+  size: number;
+  duration: number;
+  width?: number;
+  height?: number;
+  uploaded_at: string;
+}
+
+export interface AudioTrack extends MediaFile {
+  /** Nhịp của bài (ước tính, coi như tempo đều) — null nếu không nhận ra. */
+  bpm: number | null;
+  bpm_source: "auto" | "manual";
+  /** Thời điểm phách đầu tiên (giây). */
+  beat_offset: number;
+  /** Độ tin cậy của nhịp ước tính, 0–1. */
+  beat_confidence: number;
+  /** Ảnh dạng sóng âm (PNG) để hiển thị dưới timeline. */
+  waveform?: string;
+}
+
+export type CutPace = "slow" | "normal" | "fast";
+export type RenderSize = "1080p" | "720p" | "shorts";
+
+export interface EditOptions {
+  /** Nhịp cắt cảnh. */
+  pace: CutPace;
+  /** Cắt đúng phách nhạc (khi nhận ra nhịp). */
+  snapBeats: boolean;
+  /** Mốc bắt đầu từng đoạn của bài (giây) — null = tự chia theo khung bài hát. */
+  sectionStarts: number[] | null;
+  size: RenderSize;
+  /** fill = cắt cho đầy khung, fit = giữ nguyên khung, thêm viền đen. */
+  fit: "fill" | "fit";
+  fps: 24 | 30;
+  /** Lật ngang các lần lặp lại của một clip để đỡ nhàm. */
+  flipRepeats: boolean;
+  fadeIn: number;
+  fadeOut: number;
+  /** 0 = theo thứ tự storyboard; số khác = xáo thứ tự lặp. */
+  seed: number;
+}
+
+export interface RenderInfo {
+  file: string;
+  created_at: string;
+  size: number;
+  duration: number;
+  resolution: string;
+  segments: number;
+  seconds_taken: number;
+}
+
+export interface VideoProject {
+  mv_id: string;
+  audio: AudioTrack | null;
+  /** Clip theo số cảnh (key = shot_no). */
+  clips: Record<string, MediaFile>;
+  options: EditOptions;
+  renders: RenderInfo[];
+  updated_at: string;
+}
+
+export type SectionType = "intro" | "verse" | "pre" | "chorus" | "final" | "bridge" | "outro" | "other";
+
+export interface EditSection {
+  name: string;
+  type: SectionType;
+  start: number;
+  end: number;
+}
+
+/** Một đoạn cắt trên timeline: lấy clip của cảnh `shot_no` từ giây `in_point`. */
+export interface EditSegment {
+  start_frame: number;
+  frames: number;
+  start: number;
+  duration: number;
+  shot_no: number;
+  in_point: number;
+  flip: boolean;
+  /** Lần dùng thứ mấy của clip này (0 = lần đầu). */
+  use: number;
+  section_index: number;
+}
+
+export interface EditPlan {
+  fps: number;
+  duration: number;
+  total_frames: number;
+  /** Độ dài một phách (giây) nếu cắt theo nhịp. */
+  beat: number | null;
+  sections: EditSection[];
+  segments: EditSegment[];
+  /** Số lần dùng và tổng thời lượng của mỗi cảnh. */
+  uses: Record<string, { count: number; seconds: number }>;
+  warnings: string[];
+}
+
+export interface RenderJob {
+  id: string;
+  mv_id: string;
+  status: "running" | "done" | "error" | "cancelled";
+  progress: number;
+  stage: string;
+  started_at: string;
+  finished_at?: string;
+  error?: string;
+  output?: RenderInfo;
+}

@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { UserError } from "./errors";
 import { LLMError } from "./llm";
 
 export function errorResponse(err: unknown) {
@@ -9,6 +10,7 @@ export function errorResponse(err: unknown) {
     const status = { auth: 401, rate_limit: 429, refusal: 422, aborted: 499, parse: 502, truncated: 502, api: 502 }[err.kind];
     return NextResponse.json({ error: err.message, kind: err.kind }, { status });
   }
+  if (err instanceof UserError) return NextResponse.json({ error: err.message }, { status: err.status });
   if (err instanceof ZodError) {
     const msg = err.issues
       .slice(0, 5)

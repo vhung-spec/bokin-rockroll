@@ -25,6 +25,8 @@ export const DATA_DIR = process.env.MV_DATA_DIR ? path.resolve(process.env.MV_DA
 const dataPath = (...parts: string[]) => path.join(/*turbopackIgnore: true*/ DATA_DIR, ...parts);
 const HISTORY_DIR = () => dataPath("history");
 export const UPLOAD_DIR = () => dataPath("uploads");
+/** Nhạc, clip và video đã dựng của từng MV: data/media/<mvId>/ */
+export const MEDIA_DIR = () => dataPath("media");
 
 export const LIBRARY_FILES = {
   themes: "themes.json",
@@ -154,7 +156,7 @@ export async function writeCouples(data: CoupleLibrary) {
 
 // ---------- Lịch sử MV ----------
 
-const SAFE_ID = /^[a-z0-9_-]{4,80}$/i;
+export const SAFE_ID = /^[a-z0-9_-]{4,80}$/i;
 
 export function newMvId(): string {
   return `mv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -175,6 +177,8 @@ export async function loadMV(id: string): Promise<MVResult | null> {
 
 export async function deleteMV(id: string) {
   await fs.rm(mvFile(id), { force: true });
+  // Xoá luôn nhạc / clip / video đã dựng của MV (file đang mở trên Windows thì bỏ qua).
+  await fs.rm(path.join(/*turbopackIgnore: true*/ MEDIA_DIR(), id), { recursive: true, force: true }).catch(() => undefined);
 }
 
 export async function listMVs(): Promise<MVResult[]> {

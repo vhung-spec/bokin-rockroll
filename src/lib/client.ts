@@ -50,3 +50,52 @@ export const lines = (s: string) =>
     .split(/\r?\n/)
     .map((x) => x.trim())
     .filter(Boolean);
+
+/** Tải một file lên (thân request là nội dung file), có báo tiến độ 0–1. */
+export function uploadFile<T>(url: string, file: File, onProgress?: (fraction: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      let data: unknown = null;
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        data = { error: xhr.responseText };
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data as T);
+      else reject(new Error((data as { error?: string } | null)?.error ?? `Lỗi ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("Mất kết nối khi tải file lên."));
+    xhr.send(file);
+  });
+}
+
+export const mediaUrl = (mvId: string, file: string, download = false) =>
+  `/api/media/${encodeURIComponent(mvId)}/${encodeURIComponent(file)}${download ? "?download=1" : ""}`;
+
+export function formatBytes(n: number): string {
+  if (n < 1024 ** 2) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1).replace(".", ",")} MB`;
+  return `${(n / 1024 ** 3).toFixed(2).replace(".", ",")} GB`;
+}
+
+/** 83.4 → "1:23.4" */
+export function formatClock(t: number, decimals = 1): string {
+  t = Math.round(Math.max(0, t) * 10 ** decimals) / 10 ** decimals;
+  const m = Math.floor(t / 60);
+  const s = t - m * 60;
+  const str = s.toFixed(decimals).padStart(decimals ? 3 + decimals : 2, "0");
+  return `${m}:${str}`;
+}
+
+/** "1:23.4" hoặc "83.4" → 83.4 (null nếu không hợp lệ). */
+export function parseClock(text: string): number | null {
+  const m = /^\s*(?:(\d+):)?(\d+(?:[.,]\d+)?)\s*$/.exec(text);
+  if (!m) return null;
+  return (m[1] ? Number(m[1]) * 60 : 0) + Number(m[2].replace(",", "."));
+}
