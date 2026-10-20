@@ -1,0 +1,52 @@
+{
+  "veo": {
+    "name": "Google Veo",
+    "max_prompt_chars": 1800,
+    "target_prompt_chars": 1200,
+    "default_clip_len": 8,
+    "clip_lengths": [4, 6, 8],
+    "supports_audio": true,
+    "supports_negative_prompt": true,
+    "prompt_style": "Rich cinematic description in flowing sentences with camera, lens and lighting terms. Describe sound separately in the audio field (music mood, ambience, sound effects; no sung lyrics, no dialogue)."
+  },
+  "kling": {
+    "name": "Kling",
+    "max_prompt_chars": 2500,
+    "target_prompt_chars": 900,
+    "default_clip_len": 10,
+    "clip_lengths": [5, 10],
+    "supports_audio": false,
+    "supports_negative_prompt": true,
+    "prompt_style": "Concise and motion-first: subject, one clear physical action, then the camera move. Avoid long adjective lists."
+  },
+  "hailuo": {
+    "name": "Hailuo (MiniMax)",
+    "max_prompt_chars": 2000,
+    "target_prompt_chars": 800,
+    "default_clip_len": 6,
+    "clip_lengths": [6, 10],
+    "supports_audio": false,
+    "supports_negative_prompt": false,
+    "prompt_style": "Short and motion-first: who, what physical movement, how the camera moves. Plain concrete words."
+  },
+  "sora": {
+    "name": "OpenAI Sora",
+    "max_prompt_chars": 4000,
+    "target_prompt_chars": 1400,
+    "default_clip_len": 8,
+    "clip_lengths": [4, 8, 12],
+    "supports_audio": false,
+    "supports_negative_prompt": false,
+    "prompt_style": "Flowing natural-language scene description, like one paragraph of a screenplay, describing subject, setting, motion and camera in continuous prose."
+  },
+  "runway": {
+    "name": "Runway",
+    "max_prompt_chars": 1000,
+    "target_prompt_chars": 850,
+    "default_clip_len": 10,
+    "clip_lengths": [5, 10],
+    "supports_audio": false,
+    "supports_negative_prompt": false,
+    "prompt_style": "One or two continuous descriptive sentences: camera move, subject and action, setting and light. Positive phrasing only (no 'no ...' clauses)."
+  }
+}

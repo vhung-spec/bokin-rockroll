@@ -1,0 +1,73 @@
+{
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "useFallback": true,
+  "videoModel": "veo",
+  "clipLen": null,
+  "maxShots": 20,
+  "minShots": 15,
+  "loopScenes": true,
+  "defaultDuration": 180,
+  "stylePreset": "kodachrome",
+  "fixedCouple": false,
+  "concurrency": 2,
+  "allowVehicleMakes": true,
+  "channelVoice": "Imagine turning the dial of an old tabletop radio… Warm, nostalgic, second-person storytelling that invites the listener into a summer night in 1950s America.",
+  "engine": "auto",
+  "songStructure": [
+    {
+      "name": "Intro",
+      "ratio": 8,
+      "role_vi": "Thiết lập bối cảnh: establishing shot, landmark, năm",
+      "role_en": "Establish the world: establishing shot, landmark, the year"
+    },
+    {
+      "name": "Verse 1",
+      "ratio": 17,
+      "role_vi": "Giới thiệu nhân vật, đời thường",
+      "role_en": "Introduce the characters in their everyday life"
+    },
+    {
+      "name": "Pre-chorus",
+      "ratio": 8,
+      "role_vi": "Khoảnh khắc khơi mào (ánh mắt, cái chạm)",
+      "role_en": "The spark: a glance, a touch"
+    },
+    {
+      "name": "Chorus 1",
+      "ratio": 15,
+      "role_vi": "Cao trào cảm xúc của chủ đề",
+      "role_en": "First emotional peak of the theme"
+    },
+    {
+      "name": "Verse 2",
+      "ratio": 15,
+      "role_vi": "Câu chuyện tiến triển",
+      "role_en": "The story develops"
+    },
+    {
+      "name": "Chorus 2",
+      "ratio": 12,
+      "role_vi": "Cao trào, nhiều chuyển động hơn",
+      "role_en": "Second peak with more movement"
+    },
+    {
+      "name": "Bridge",
+      "ratio": 10,
+      "role_vi": "Khoảnh khắc lắng hoặc bước ngoặt",
+      "role_en": "A quiet moment or a turning point"
+    },
+    {
+      "name": "Final chorus",
+      "ratio": 10,
+      "role_vi": "Cao trào lớn nhất",
+      "role_en": "The biggest climax"
+    },
+    {
+      "name": "Outro",
+      "ratio": 5,
+      "role_vi": "Kết, cảnh rộng, khép lại câu chuyện",
+      "role_en": "Resolution: wide shot that closes the story"
+    }
+  ]
+}

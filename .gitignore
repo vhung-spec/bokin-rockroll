@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# env (chứa API key — không commit)
+.env
+.env*.local
+
+# dữ liệu người dùng sinh ra khi chạy
+data/history/
+data/uploads/
+data/drafts/
+data/media/
+data/render_queue.json
+
+# misc
+.DS_Store
+npm-debug.log*
+coverage/

@@ -1,0 +1,98 @@
+{
+  "T01": {
+    "name": "Sét ái tình",
+    "mood": "love at first sight, breathless, time stops",
+    "pacing": "mid",
+    "signature_shots": ["eye-contact slow motion", "crowd blurs around the couple", "freeze-frame glance"],
+    "description_vi": "Tiếng sét ái tình: một ánh mắt khiến thế giới xung quanh như ngừng lại.",
+    "needs_review": false
+  },
+  "T02": {
+    "name": "Thầm thương trộm nhớ",
+    "mood": "shy longing, secret crush, stolen glances, tender hope",
+    "pacing": "slow",
+    "signature_shots": ["peeking from behind an object", "rack focus from one face to the other", "hand almost touching then pulling back"],
+    "description_vi": "Tên gợi ý — hãy sửa lại cho đúng mã chủ đề của bạn.",
+    "needs_review": true
+  },
+  "T03": {
+    "name": "Buổi hẹn đầu tiên",
+    "mood": "nervous excitement, sweet awkwardness, giddy smiles",
+    "pacing": "mid",
+    "signature_shots": ["doorstep knock with flowers", "two straws in one milkshake", "awkward shy smile close-up"],
+    "description_vi": "Tên gợi ý — hãy sửa lại cho đúng mã chủ đề của bạn.",
+    "needs_review": true
+  },
+  "T04": {
+    "name": "Tán tỉnh tinh nghịch",
+    "mood": "playful, cheeky, teasing, bouncy fun",
+    "pacing": "fast",
+    "signature_shots": ["wink to camera-side glance", "playful chase around an object", "whip pan between the two faces"],
+    "description_vi": "Tên gợi ý — hãy sửa lại cho đúng mã chủ đề của bạn.",
+    "needs_review": true
+  },
+  "T05": {
+    "name": "Chờ đợi & nhớ nhung",
+    "mood": "wistful, melancholic longing, quiet hope",
+    "pacing": "slow",
+    "signature_shots": ["rain on a window with a silhouette", "empty seat beside the character", "slow dolly back leaving the character alone"],
+    "description_vi": "Tên gợi ý — hãy sửa lại cho đúng mã chủ đề của bạn.",
+    "needs_review": true
+  },
+  "T06": {
+    "name": "Giận hờn & làm lành",
+    "mood": "bittersweet tension turning into warm reconciliation",
+    "pacing": "mid",
+    "signature_shots": ["backs turned to each other in one frame", "slow turn-around reveal", "running reunion embrace"],
+    "description_vi": "Tên gợi ý — hãy sửa lại cho đúng mã chủ đề của bạn.",
+    "needs_review": true
+  },
+  "T07": {
+    "name": "Theo đuổi",
+    "mood": "determined, energetic courtship, comedic persistence",
+    "pacing": "fast",
+    "signature_shots": ["running alongside a moving car or bus", "grand gesture in public", "split-diopter shot of both characters"],
+    "description_vi": "Tên gợi ý — hãy sửa lại cho đúng mã chủ đề của bạn.",
+    "needs_review": true
+  },
+  "T08": {
+    "name": "Say đắm & ngây ngất",
+    "mood": "dreamy, euphoric, intoxicated by love",
+    "pacing": "mid",
+    "signature_shots": ["spinning camera", "lens flare", "montage of night adventures"],
+    "description_vi": "Say đắm, ngây ngất như đang mơ giữa đêm hè.",
+    "needs_review": false
+  },
+  "T09": {
+    "name": "Rung động mãnh liệt",
+    "mood": "electric, heart-pounding, high energy",
+    "pacing": "fast",
+    "signature_shots": ["fast cuts on beat", "dance close-ups", "reaction shots"],
+    "description_vi": "Rung động mãnh liệt, tim đập theo từng nhịp trống.",
+    "needs_review": false
+  },
+  "T10": {
+    "name": "Tự do trên đường",
+    "mood": "carefree freedom, wind in the hair, open-road adventure",
+    "pacing": "fast",
+    "signature_shots": ["low tracking shot alongside a convertible", "hair and scarf blowing in the wind", "aerial-style wide of the open road"],
+    "description_vi": "Tên gợi ý — hãy sửa lại cho đúng mã chủ đề của bạn.",
+    "needs_review": true
+  },
+  "T11": {
+    "name": "Nụ hôn diệu kỳ",
+    "mood": "tender, magical, intimate",
+    "pacing": "slow",
+    "signature_shots": ["slow push-in", "soft backlight", "world fades away"],
+    "description_vi": "Nụ hôn khiến cả thế giới nhạt nhoà, chỉ còn hai người.",
+    "needs_review": false
+  },
+  "T12": {
+    "name": "Mãi mãi bên nhau",
+    "mood": "triumphant, heartfelt devotion, happily-ever-after",
+    "pacing": "mid",
+    "signature_shots": ["kneeling proposal with a small ring box", "twirl into an embrace", "silhouette against a sunset or fireworks"],
+    "description_vi": "Tên gợi ý — hãy sửa lại cho đúng mã chủ đề của bạn.",
+    "needs_review": true
+  }
+}
