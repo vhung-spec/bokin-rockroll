@@ -1,6 +1,6 @@
 // Dựng MV thật bằng ffmpeg từ clip + nhạc tự tạo (testsrc + tiếng click 120 BPM).
 import { spawnSync } from "node:child_process";
-import { cpSync, createReadStream, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, createReadStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
@@ -51,7 +51,7 @@ beforeAll(async () => {
   bin = info.path!;
   mv = await gen.generateMV({ id: "r1", world_location: "Hollywood Boulevard Summer 1954", theme_code: "T01", outline: "Gặp nhau giữa phố đông" });
   rmSync(src, { recursive: true, force: true });
-  spawnSync("mkdir", ["-p", src]);
+  mkdirSync(src, { recursive: true });
 }, 60000);
 
 afterAll(() => {

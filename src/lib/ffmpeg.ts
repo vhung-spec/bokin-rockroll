@@ -169,10 +169,12 @@ export function parseProbe(stderr: string): ProbeResult {
   };
 }
 
-export async function probe(file: string): Promise<ProbeResult> {
+/** `still` = ảnh tĩnh (logo): chỉ cần đọc được khung hình, không cần thời lượng (ffmpeg trên Windows báo ảnh PNG dài 0 giây). */
+export async function probe(file: string, opts: { still?: boolean } = {}): Promise<ProbeResult> {
   const res = await runFfmpeg(["-hide_banner", "-i", file]);
   if (!/Stream #/.test(res.stderr)) throw new FfmpegError("File không đọc được (không phải video/âm thanh, hoặc bị hỏng).");
   const info = parseProbe(res.stderr);
+  if (opts.still && info.video) return { ...info, duration: Number.isFinite(info.duration) && info.duration > 0 ? info.duration : 0 };
   if (!Number.isFinite(info.duration) || info.duration <= 0) {
     // Một số file (webm từ trình duyệt…) không ghi thời lượng: giải mã hết để đo.
     const full = await runFfmpeg(["-hide_banner", "-i", file, "-f", "null", "-"]);

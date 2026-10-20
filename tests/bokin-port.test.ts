@@ -1,5 +1,5 @@
 // Các phần chuyển từ Bokin Studio Music: cân bằng âm lượng, preset YouTube, logo / intro, font.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_INTRO, DEFAULT_LOGO_LAYOUT, downloadName, focusPull, fontSize, introAss, introSpan, logoFilters, metadataArgs, mvTags } from "@/lib/branding";
 import { DEFAULT_EDIT_OPTIONS, mergeEditOptions } from "@/lib/edit";
@@ -151,9 +151,19 @@ describe("logo / intro (branding.py)", () => {
     expect(old.intro).toEqual(DEFAULT_EDIT_OPTIONS.intro);
   });
 
-  it("đọc tên font TrueType", () => {
-    const info = readFontInfo(readFileSync("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"));
-    expect(info).toEqual({ family: "DejaVu Sans", fullName: "DejaVu Sans Bold", bold: true });
+  // Font đậm có sẵn trên máy (Linux / Windows / macOS) → tên họ font, tên đầy đủ.
+  const BOLD_FONT = (
+    [
+      ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "DejaVu Sans", "DejaVu Sans Bold"],
+      ["C:\\Windows\\Fonts\\arialbd.ttf", "Arial", "Arial Bold"],
+      ["/System/Library/Fonts/Supplemental/Arial Bold.ttf", "Arial", "Arial Bold"],
+      ["/Library/Fonts/Arial Bold.ttf", "Arial", "Arial Bold"],
+    ] as const
+  ).find(([p]) => existsSync(p));
+
+  it.skipIf(!BOLD_FONT)("đọc tên font TrueType", () => {
+    const [file, family, fullName] = BOLD_FONT!;
+    expect(readFontInfo(readFileSync(file))).toEqual({ family, fullName, bold: true });
     expect(readFontInfo(Buffer.from("không phải font"))).toBeNull();
   });
 });

@@ -208,7 +208,7 @@ export async function addAsset(mvId: string, kind: "logo" | "font", name: string
     let width: number | undefined;
     let height: number | undefined;
     if (kind === "logo") {
-      const info = await probe(abs).catch(() => null);
+      const info = await probe(abs, { still: true }).catch(() => null);
       if (!info?.video) throw new UploadError(`"${name}" không phải ảnh đọc được.`);
       ({ width, height } = info.video);
     } else {
