@@ -198,8 +198,8 @@ export default function SettingsPage() {
               <label className="flex items-start gap-2 text-sm">
                 <input type="radio" name="museMode" className="mt-1" checked={s.museMode === "gateway"} onChange={() => set("museMode", "gateway")} />
                 <span>
-                  <b>Cổng Muse (tự động)</b> — app tự gửi từng cảnh qua Cổng Muse chạy trên máy này (file khởi động tự mở cổng). Bạn đăng nhập Muse một lần
-                  trong cửa sổ Chrome của cổng.
+                  <b>Tự động (Muse trong app)</b> — app tự mở Chrome và gửi từng cảnh cho Muse. Bạn đăng nhập Muse một lần trong cửa sổ Chrome đó (bấm
+                  “Đăng nhập Muse” bên dưới).
                 </span>
               </label>
               <label className="flex items-start gap-2 text-sm">
@@ -209,15 +209,19 @@ export default function SettingsPage() {
                 </span>
               </label>
             </div>
-            {s.museMode === "gateway" ? (
-              <Field label="Địa chỉ Cổng Muse" hint="Mặc định http://127.0.0.1:18700 — chỉ trên máy này.">
-                <input className="input" value={s.museGatewayUrl} onChange={(e) => set("museGatewayUrl", e.target.value)} />
+            <div className="space-y-3">
+              <Field
+                label="Thư mục nhạc (tự ghép bài hát)"
+                hint="MV chưa có bài hát → app tự tìm file nhạc trùng tên bài trong thư mục này (vd. D:\Downloads\Nhạc kênh khúc nhạc thời gian). Để trống = không tự ghép."
+              >
+                <input className="input" value={s.songDir} onChange={(e) => set("songDir", e.target.value)} />
               </Field>
-            ) : (
-              <Field label="Thư mục dữ liệu HaoHao" hint={`Thư mục có file tasks.json. Để trống = tự tìm (${muse?.defaultDir ?? "…"}).`}>
-                <input className="input" value={s.museDataDir} placeholder={muse?.defaultDir} onChange={(e) => set("museDataDir", e.target.value)} />
-              </Field>
-            )}
+              {s.museMode === "haohao" && (
+                <Field label="Thư mục dữ liệu HaoHao" hint={`Thư mục có file tasks.json. Để trống = tự tìm (${muse?.defaultDir ?? "…"}).`}>
+                  <input className="input" value={s.museDataDir} placeholder={muse?.defaultDir} onChange={(e) => set("museDataDir", e.target.value)} />
+                </Field>
+              )}
+            </div>
             <div className="md:col-span-2">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={s.museAutoRender} onChange={(e) => set("museAutoRender", e.target.checked)} />

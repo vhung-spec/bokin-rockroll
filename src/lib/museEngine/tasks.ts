@@ -1,4 +1,4 @@
-// HÀNG ĐỢI TASK của cổng — lưu ở <thư mục cổng>/tasks.json (còn nguyên sau khi tắt cổng).
+// HÀNG ĐỢI TASK của Muse trong app — lưu ở <thư mục dữ liệu Muse>/tasks.json (còn nguyên sau khi tắt app).
 // Trạng thái: queued → processing → succeeded | failed | cancelled. Ảnh gửi kèm được ghi ra task-images/ để file JSON nhẹ.
 
 import { randomBytes } from "node:crypto";
@@ -59,14 +59,14 @@ export class TaskStore {
 
   constructor(dir: string) {
     mkdirSync(dir, { recursive: true });
-    this.file = path.join(dir, "tasks.json");
-    this.imgDir = path.join(dir, "task-images");
+    this.file = path.join(/*turbopackIgnore: true*/ dir, "tasks.json");
+    this.imgDir = path.join(/*turbopackIgnore: true*/ dir, "task-images");
     try {
       this.tasks = JSON.parse(readFileSync(this.file, "utf8")) as GatewayTask[];
     } catch {
       this.tasks = [];
     }
-    // Task dở khi cổng tắt: đã gửi lên Muse (có sessionId) → dò tiếp phiên đó; chưa gửi → xếp hàng lại.
+    // Task dở khi app tắt: đã gửi lên Muse (có sessionId) → dò tiếp phiên đó; chưa gửi → xếp hàng lại.
     for (const t of this.tasks) if (t.status === "processing" && !t.sessionId) Object.assign(t, { status: "queued", step: "" });
     this.flush();
   }
@@ -76,7 +76,7 @@ export class TaskStore {
     this.timer = setTimeout(() => this.flush(), 200);
   }
 
-  /** Ghi ngay (cả lúc tắt cổng). File tạm + đổi tên: tắt giữa lúc ghi không làm hỏng tasks.json. */
+  /** Ghi ngay (cả lúc tắt app). File tạm + đổi tên: tắt giữa lúc ghi không làm hỏng tasks.json. */
   flush() {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
@@ -131,7 +131,7 @@ export class TaskStore {
       error: "",
     };
     this.tasks.unshift(task);
-    // Bỏ bớt task cũ đã kết thúc khỏi danh sách khi quá nhiều (không xoá file nào: video và ảnh vẫn nằm trong thư mục cổng).
+    // Bỏ bớt task cũ đã kết thúc khỏi danh sách khi quá nhiều (không xoá file nào: video và ảnh vẫn nằm trong thư mục dữ liệu Muse).
     while (this.tasks.length > MAX_TASKS) {
       const i = this.tasks.findLastIndex((t) => t.status !== "queued" && t.status !== "processing");
       if (i < 0) break;

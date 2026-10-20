@@ -103,7 +103,7 @@ export default function MusePage() {
         <p className="mt-1 max-w-3xl text-sm text-muted">
           {gateway ? (
             <>
-              Muse (Meta) làm clip qua <b>Cổng Muse</b> chạy trên máy này. Chọn MV → app <b>tự gửi</b> từng cảnh (kèm ảnh nhân vật nếu có).
+              Muse (Meta) làm clip <b>ngay trong app</b>. Chọn MV → app <b>tự gửi</b> từng cảnh (kèm ảnh nhân vật nếu có).
             </>
           ) : (
             <>
@@ -116,7 +116,7 @@ export default function MusePage() {
       </div>
       <ErrorBox error={error} />
 
-      <Card title={gateway ? "Cổng Muse" : "HaoHao"}>{view ? <MuseStatus view={view} url={url} onView={setView} /> : <Spinner />}</Card>
+      <Card title={gateway ? "Muse" : "HaoHao"}>{view ? <MuseStatus view={view} url={url} onView={setView} /> : <Spinner />}</Card>
 
       <Card
         title="1. Chọn MV"

@@ -20,7 +20,7 @@ import type {
   VideoModelLibrary,
 } from "./types";
 
-// turbopackIgnore: không để lúc build Turbopack đưa cả thư mục dự án (video trong data/media, profile Chrome của Cổng Muse…) vào trace.
+// turbopackIgnore: không để lúc build Turbopack đưa cả thư mục dự án (video trong data/media, profile Chrome của Muse…) vào trace.
 export const DATA_DIR = process.env.MV_DATA_DIR
   ? path.resolve(/*turbopackIgnore: true*/ process.env.MV_DATA_DIR)
   : path.join(/*turbopackIgnore: true*/ process.cwd(), "data");
@@ -32,8 +32,10 @@ export const UPLOAD_DIR = () => dataPath("uploads");
 export const MEDIA_DIR = () => dataPath("media");
 /** Hàng chờ dựng video. */
 export const QUEUE_FILE = () => dataPath("render_queue.json");
-/** Các cảnh đang tạo clip bằng Muse (qua HaoHao). */
+/** Các cảnh đang tạo clip bằng Muse. */
 export const MUSE_FILE = () => dataPath("muse.json");
+/** Dây chuyền tự động (kịch bản → bài hát → clip Muse → MP4). */
+export const PIPELINE_FILE = () => dataPath("pipeline.json");
 
 export const LIBRARY_FILES = {
   themes: "themes.json",
@@ -63,8 +65,8 @@ export const DEFAULT_SETTINGS: Settings = {
   engine: "auto",
   songStructure: DEFAULT_SONG_STRUCTURE,
   museMode: "gateway",
-  museGatewayUrl: "http://127.0.0.1:18700",
   museDataDir: "",
+  songDir: "",
   museAutoRender: true,
   museAvoid: true,
 };

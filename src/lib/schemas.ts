@@ -40,11 +40,8 @@ export const zSettings = z.object({
     .array(z.object({ name: z.string().min(1), ratio: z.number().min(0), role_vi: z.string(), role_en: z.string() }))
     .min(1),
   museMode: z.enum(["gateway", "haohao"]),
-  museGatewayUrl: z
-    .string()
-    .trim()
-    .regex(/^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}\/?$/, "Địa chỉ Cổng Muse phải là http://127.0.0.1:<cổng> (chỉ trên máy này)"),
   museDataDir: z.string().trim().max(500),
+  songDir: z.string().trim().max(500),
   museAutoRender: z.boolean(),
   museAvoid: z.boolean(),
 }).refine((s) => s.minShots <= s.maxShots, { message: "Số cảnh tối thiểu phải ≤ số cảnh tối đa", path: ["minShots"] });

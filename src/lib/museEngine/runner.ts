@@ -4,8 +4,8 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { weeklyOut, type Attachment, type MuseDriver, type Quota } from "./musePage.ts";
-import { InputError, MAX_ATTACH, type GatewayTask, type TaskStore } from "./tasks.ts";
+import { weeklyOut, type Attachment, type MuseDriver, type Quota } from "./page";
+import { InputError, MAX_ATTACH, type GatewayTask, type TaskStore } from "./tasks";
 
 const RATIO_LABEL: Record<string, string> = { "9:16": "9:16 dọc", "16:9": "16:9 ngang", "1:1": "1:1 vuông", "4:3": "4:3 ngang", "3:4": "3:4 dọc" };
 const EXT: Record<string, string> = { "video/mp4": "mp4", "image/webp": "webp", "image/png": "png", "image/jpeg": "jpg" };
@@ -63,7 +63,7 @@ export async function runTask(task: GatewayTask, o: RunOptions): Promise<string[
     update({ sessionId: sid, step: "Muse đang làm" });
   }
 
-  // Tính giờ từ lúc task bắt đầu → tắt mở lại cổng vẫn giữ đúng hạn.
+  // Tính giờ từ lúc task bắt đầu → tắt mở lại app vẫn giữ đúng hạn.
   const limitMin = Math.max(task.kind === "image" ? limits.image : limits.video, task.timeoutMin || 0);
   let status: string | null = null;
   for (let errors = 0; ; ) {
@@ -98,7 +98,7 @@ export async function runTask(task: GatewayTask, o: RunOptions): Promise<string[
   for (const [k, f] of wanted.entries()) {
     const buf = await page.readFile(f.path);
     if (f.byteLen > 0 && buf.length !== f.byteLen) throw new Error(`Tải file lỗi: ${buf.length}/${f.byteLen} byte`);
-    const file = path.join(outputDir, `${task.id}_${k + 1}.${EXT[f.mime] ?? f.mime.split("/")[1]}`);
+    const file = path.join(/*turbopackIgnore: true*/ outputDir, `${task.id}_${k + 1}.${EXT[f.mime] ?? f.mime.split("/")[1]}`);
     writeFileSync(file, buf);
     saved.push(file);
   }
@@ -140,15 +140,25 @@ export interface WorkerState {
   quota: Quota | null;
   /** Lý do hàng đợi đang dừng ("" = không dừng). */
   paused: string;
-  /** Người dùng đã tự đóng cửa sổ Chrome của cổng. */
+  /** Người dùng đã tự đóng cửa sổ Chrome của Muse. */
   chromeClosed: boolean;
   current: string | null;
   lastSentAt: number;
+  /** Muse báo hết hạn mức (qua lời từ chối / câu trả lời) — lúc nào, Muse nói gì. Hàng đợi dừng tới khi bấm Kiểm tra hoặc sau 6 giờ. */
+  limitHit: { at: number; message: string } | null;
 }
+
+/**
+ * Muse không còn cho đọc % hạn mức (trang đổi, 20/10/2026) → nhận ra "hết hạn mức" qua lời Muse nói khi từ chối lệnh / trả lời.
+ * Chặt để không nhầm câu trả lời bình thường.
+ */
+export const LIMIT_RE =
+  /(usage|weekly|rate|daily|monthly)\s+limit|limit (reached|exceeded)|quota|out of (credits|tokens)|hết (hạn mức|lượt|token)|đã dùng hết|vượt (quá )?giới hạn|giới hạn (sử dụng|hàng tuần|hằng tuần)|nâng cấp gói|upgrade (your|to) /i;
+const LIMIT_PAUSE_MS = 6 * 3600e3;
 
 /** Chạy lần lượt các task trên một tài khoản Muse. */
 export class Worker {
-  state: WorkerState = { loggedIn: null, loggingIn: false, quota: null, paused: "", chromeClosed: false, current: null, lastSentAt: 0 };
+  state: WorkerState = { loggedIn: null, loggingIn: false, quota: null, paused: "", chromeClosed: false, current: null, lastSentAt: 0, limitHit: null };
   private o: Required<Omit<WorkerOptions, "store" | "page" | "outputDir">> & Pick<WorkerOptions, "store" | "page" | "outputDir">;
   private loop: Promise<void> | null = null;
   private again = false;
@@ -188,7 +198,7 @@ export class Worker {
       });
   }
 
-  /** Chờ vòng chạy hiện tại xong (dùng cho test / lúc tắt cổng). */
+  /** Chờ vòng chạy hiện tại xong (dùng cho test / lúc tắt app). */
   async idle(): Promise<void> {
     while (this.loop) await this.loop;
   }
@@ -221,7 +231,7 @@ export class Worker {
 
   /** "" nếu gửi / dò được; không thì lý do phải chờ. */
   private async ready(task: GatewayTask): Promise<string> {
-    const closed = "Cửa sổ Chrome của cổng đã bị đóng — bấm “Đăng nhập Muse” để mở lại.";
+    const closed = "Cửa sổ Chrome của Muse đã bị đóng — bấm “Đăng nhập Muse” để mở lại.";
     if (this.state.chromeClosed) return closed;
     let ok = false;
     // Trang vừa mở còn đang tải → login() báo chưa; thử vài lần trước khi kết luận.
@@ -238,6 +248,11 @@ export class Worker {
     if (!ok) return "Chưa đăng nhập Muse — bấm “Đăng nhập Muse” rồi đăng nhập trong cửa sổ Chrome vừa mở.";
     if (task.status !== "queued") return ""; // dò tiếp phiên đã gửi không tốn lượt
     const now = this.o.now();
+    const hit = this.state.limitHit;
+    if (hit && now - hit.at < LIMIT_PAUSE_MS) {
+      this.wakeAt(hit.at + LIMIT_PAUSE_MS);
+      return `Muse báo hết hạn mức (“${hit.message.slice(0, 160)}”) — tạm dừng gửi. Bấm “Kiểm tra” để chạy tiếp, hoặc app tự thử lại lúc ${new Date(hit.at + LIMIT_PAUSE_MS).toLocaleString("vi-VN")}.`;
+    }
     if (!this.state.quota || now - this.state.quota.checkedAt > 10 * 60e3) await this.refreshQuota();
     const q = this.state.quota;
     if (q && weeklyOut(q) && (!q.resetsAt || q.resetsAt > now)) {
@@ -290,6 +305,13 @@ export class Worker {
           return;
         }
       }
+      // Muse nói đã hết hạn mức (lúc từ chối hoặc trong câu trả lời) → dừng hàng đợi, task chờ gửi lại sau.
+      if (LIMIT_RE.test(e.message)) {
+        this.state.limitHit = { at: now(), message: e.message.replace(/^Muse (không nhận lệnh|không tạo video)[.:]?\s*/, "") };
+        const t = store.get(id)!;
+        store.update(id, { status: "queued", step: "", sessionId: "", attempts: Math.max(0, t.attempts - 1), error: "Muse báo hết hạn mức — chờ chạy tiếp." });
+        return;
+      }
       store.update(id, failurePatch(store.get(id)!, e, now(), this.o.maxAttempts));
     } finally {
       this.state.current = null;
@@ -313,7 +335,7 @@ export class Worker {
   }
 
   /**
-   * Đăng nhập: chưa đăng nhập thì hiện Chrome của cổng, dò mỗi vài giây tới khi xong (tối đa 15 phút) rồi cất cửa sổ đi.
+   * Đăng nhập: chưa đăng nhập thì hiện Chrome của Muse, dò mỗi vài giây tới khi xong (tối đa 15 phút) rồi cất cửa sổ đi.
    * Người dùng đóng cửa sổ Chrome = bỏ đăng nhập.
    */
   login(): Promise<boolean> {
@@ -356,6 +378,8 @@ export class Worker {
 
   /** Kiểm tra lại đăng nhập + hạn mức (mở Chrome nếu chưa mở). */
   async check(): Promise<WorkerState> {
+    // Người dùng bấm Kiểm tra = cho chạy tiếp sau khi Muse báo hết hạn mức.
+    this.state.limitHit = null;
     if (!this.state.chromeClosed) {
       try {
         // Trang vừa mở còn đang tải → login() báo chưa; thử vài lần trước khi kết luận.

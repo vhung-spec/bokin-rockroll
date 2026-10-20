@@ -303,23 +303,15 @@ describe("HaoHao giả → clip vào đúng cảnh", () => {
   }, 60000);
 });
 
-describe("Cổng Muse (gửi tự động) → clip vào đúng cảnh", () => {
-  it("chưa mở cổng → báo rõ, không ghi nhận cảnh nào", async () => {
-    setSettings({ museMode: "gateway", museGatewayUrl: "http://127.0.0.1:9" });
-    const gen = await import("@/lib/generate");
-    const other = await gen.generateMV({ id: "3", world_location: "Times Square Winter 1956", theme_code: "T01", outline: "Gặp lại" });
-    await expect(jobs.sendToMuse([other.id], { shots: [1] })).rejects.toThrow(/Chưa kết nối được Cổng Muse/);
-    expect((await jobs.readMuse()).mvs.some((m) => m.mv_id === other.id)).toBe(false);
-  });
-
+describe("Muse trong app (gửi tự động) → clip vào đúng cảnh", () => {
   it("app tự gửi cảnh (kèm ảnh nhân vật) → Muse giả làm xong → clip vào MV", async () => {
-    const { createGateway } = await import("../gateway/server.ts");
+    const { initMuseEngine, closeMuseEngine } = await import("@/lib/museEngine");
     const { FakeMuse, FAST } = await import("./fakeMuse");
     const gen = await import("@/lib/generate");
     const fake = new FakeMuse(readFileSync(clip));
-    const gw = await createGateway({ dir: path.join(tmp, "gateway"), port: 0, page: fake, worker: FAST });
+    const gw = initMuseEngine({ dir: path.join(tmp, "muse-engine"), page: fake, worker: FAST });
     try {
-      setSettings({ museMode: "gateway", museGatewayUrl: gw.url });
+      setSettings({ museMode: "gateway" });
       const m = await gen.generateMV({ id: "4", world_location: "Route 66 Summer 1957", theme_code: "T01", outline: "Đi xe dọc đường 66" });
       // Ảnh tham chiếu của nhân vật có trong cảnh đầu tiên.
       const s1 = m.shots[0];
@@ -376,7 +368,7 @@ describe("Cổng Muse (gửi tự động) → clip vào đúng cảnh", () => {
       expect(rest.count).toBe(new Set(m.shots.slice(3).map((s) => muse.museText(s, { avoid: true }))).size);
       expect(gw.store.list().filter((t) => t.prompt === muse.museText(s1, { avoid: true }))).toHaveLength(1);
     } finally {
-      await gw.close();
+      await closeMuseEngine();
       setSettings();
     }
   }, 60000);

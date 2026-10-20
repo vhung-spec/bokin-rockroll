@@ -25,7 +25,7 @@ export interface MuseTask {
   created_at: number;
 }
 
-/** Nguồn task của công cụ tạo video: Cổng Muse (museGateway.ts) hoặc HaoHao dán tay (haohao.ts). */
+/** Nguồn task của công cụ tạo video: Muse trong app (museEngine/) hoặc HaoHao dán tay (haohao.ts). */
 export interface MuseSource {
   tasks(): Promise<MuseTask[]>;
   /** File kết quả còn dùng được không (để nhận lại video có sẵn thay vì tạo lại). */
@@ -47,7 +47,7 @@ export interface MuseShotJob {
   sent_at: string;
   status: MuseShotStatus;
   task_id?: string;
-  /** Đã gửi thẳng qua Cổng Muse → theo đúng task_id (không cần so nội dung). */
+  /** Đã gửi thẳng qua Muse trong app → theo đúng task_id (không cần so nội dung). */
   submitted?: boolean;
   step?: string;
   message?: string;
@@ -169,7 +169,7 @@ export function advanceJob(job: MuseShotJob, task: MuseTask | undefined): { job:
   if (!task) {
     // Task đã từng thấy nay biến mất (bị xoá bên công cụ tạo video) → quay về chờ / báo lỗi.
     const lost = job.task_id && job.status !== "waiting";
-    if (job.submitted) return { job: { ...job, status: "error", step: undefined, message: "Không còn thấy task này bên Cổng Muse — gửi lại cảnh nếu vẫn cần." } };
+    if (job.submitted) return { job: { ...job, status: "error", step: undefined, message: "Không còn thấy task này trong hàng đợi Muse — gửi lại cảnh nếu vẫn cần." } };
     return {
       job: {
         ...job,

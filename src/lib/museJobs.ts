@@ -1,10 +1,11 @@
 // Tạo clip bằng Muse — phía server: lưu các cảnh đang làm (data/muse.json), dò công cụ tạo video vài giây một lần,
 // clip nào xong thì đưa vào đúng cảnh của đúng MV, MV đủ clip + có bài hát thì tự vào hàng chờ dựng.
-// Hai cách gửi (Cài đặt → museMode): "gateway" = Cổng Muse tự gửi từng cảnh; "haohao" = copy prompt để dán vào HaoHao.
-// Tắt app giữa chừng: cổng / HaoHao vẫn làm tiếp; mở lại app là dò tiếp từ data/muse.json.
+// Hai cách gửi (Cài đặt → museMode): "gateway" = Muse chạy ngay trong app, tự gửi từng cảnh (museEngine/); "haohao" = copy prompt
+// để dán vào HaoHao. Tắt app giữa chừng: mở lại app là dò tiếp từ data/muse.json (HaoHao thì vẫn làm tiếp trong lúc app tắt).
 
-import { promises as fs } from "node:fs";
+import { createReadStream, existsSync, promises as fs } from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { UserError } from "./errors";
 import { defaultHaoHaoDir, haohaoDir, haohaoInfo, haohaoSource, type HaoHaoInfo } from "./haohao";
 import { VIDEO_EXT, addClip, loadProject } from "./media";
@@ -21,7 +22,7 @@ import {
   type MuseState,
   type MuseTask,
 } from "./muse";
-import { gatewayRecheck, gatewaySource, gatewayStatus, gatewaySubmit, type GatewayStatus } from "./museGateway";
+import { engineStatus, museEngine, type EngineStatus } from "./museEngine";
 import { addToQueue, startQueue } from "./queue";
 import { isRendering } from "./render";
 import { MUSE_FILE, UPLOAD_DIR, loadMV, readJson, readSettings, withLock, writeJson } from "./store";
@@ -51,17 +52,36 @@ function updateMuse<T>(fn: (s: MuseState) => T | Promise<T>): Promise<T> {
   });
 }
 
+/** Muse trong app: đọc thẳng hàng đợi của bộ máy (cùng tiến trình); video nằm trong thư mục dữ liệu Muse. */
+function engineSource(): MuseSource {
+  const { store } = museEngine();
+  return {
+    async tasks() {
+      return store
+        .list()
+        .filter((t) => t.kind === "video")
+        .map((t) => ({ id: t.id, prompt: t.prompt, status: t.status, step: t.step, error: t.error, files: t.files, ratio: t.ratio, held: false, created_at: t.createdAt }));
+    },
+    hasFile: (file) => existsSync(file),
+    async open(task, index) {
+      const file = task.files[index];
+      if (!file || !existsSync(file)) return null;
+      return { name: path.basename(file), body: Readable.toWeb(createReadStream(file)) as ReadableStream<Uint8Array> };
+    },
+  };
+}
+
 /** Nguồn task theo cách gửi đang chọn. */
 function sourceFor(settings: Settings): MuseSource {
-  return settings.museMode === "gateway" ? gatewaySource(settings.museGatewayUrl) : haohaoSource(haohaoDir(settings.museDataDir));
+  return settings.museMode === "gateway" ? engineSource() : haohaoSource(haohaoDir(settings.museDataDir));
 }
 
 const findJob = (s: MuseState, mvId: string, shotNo: number) => s.mvs.find((m) => m.mv_id === mvId)?.shots.find((j) => j.shot_no === shotNo);
 
 /** Cảnh gửi bằng cách khác với cách đang chọn (đổi Cài đặt giữa chừng) → giữ nguyên, chỉ nhắc. */
 const OTHER_MODE = {
-  gateway: "Cảnh này gửi qua Cổng Muse — chọn lại “Cổng Muse” trong Cài đặt để theo dõi tiếp.",
-  haohao: "Cảnh này chờ dán vào HaoHao — chọn lại “HaoHao (dán tay)” trong Cài đặt để theo dõi tiếp, hoặc gửi lại cảnh qua Cổng Muse.",
+  gateway: "Cảnh này gửi qua Muse trong app — chọn lại “Tự động (Muse trong app)” trong Cài đặt để theo dõi tiếp.",
+  haohao: "Cảnh này chờ dán vào HaoHao — chọn lại “HaoHao (dán tay)” trong Cài đặt để theo dõi tiếp, hoặc gửi lại cảnh qua Muse trong app.",
 };
 const otherMode = (job: MuseShotJob, gateway: boolean) => Boolean(job.submitted) !== gateway;
 
@@ -87,7 +107,7 @@ async function shotImages(mv: MVResult, shot: Shot): Promise<string[]> {
 // ---------- Gửi cảnh sang Muse ----------
 
 export interface SendResult {
-  /** true = đã gửi thẳng qua Cổng Muse (không cần dán); false = cách HaoHao, `text` là chữ để dán. */
+  /** true = đã gửi thẳng qua Muse trong app (không cần dán); false = cách HaoHao, `text` là chữ để dán. */
   sent: boolean;
   /** Nội dung để dán vào tab Studio của HaoHao (mỗi prompt cách nhau một dòng trống). */
   text: string;
@@ -95,7 +115,7 @@ export interface SendResult {
   count: number;
   /** Số cảnh nhận luôn video đã có sẵn (cùng prompt), không tốn thêm lượt. */
   reused: number;
-  /** Số cảnh gửi qua cổng bị lỗi. */
+  /** Số cảnh gửi sang Muse bị lỗi. */
   failed: number;
   shots: number;
   mvs: number;
@@ -103,7 +123,7 @@ export interface SendResult {
 }
 
 /**
- * Bắt đầu tạo clip cho các MV. Cổng Muse: gửi luôn từng cảnh (kèm ảnh tham chiếu nhân vật). HaoHao: trả chữ để dán.
+ * Bắt đầu tạo clip cho các MV. Muse trong app: gửi luôn từng cảnh (kèm ảnh tham chiếu nhân vật). HaoHao: trả chữ để dán.
  * `shots` (khi gửi một MV) = chỉ các cảnh này; `onlyMissing` = chỉ cảnh chưa có clip.
  * Cảnh chưa có clip mà đã có sẵn video cùng prompt → nhận luôn video đó, không gửi lại.
  */
@@ -111,10 +131,6 @@ export async function sendToMuse(ids: string[], opts: { shots?: number[]; onlyMi
   if (!ids.length) throw new UserError("Chưa chọn MV nào.");
   const settings = await readSettings();
   const gateway = settings.museMode === "gateway";
-  if (gateway) {
-    const st = await gatewayStatus(settings.museGatewayUrl);
-    if (!st.reachable) throw new UserError(st.error ?? "Chưa kết nối được Cổng Muse.", 503);
-  }
   const src = sourceFor(settings);
   let tasks: MuseTask[] = [];
   let warning: string | undefined;
@@ -135,7 +151,7 @@ export async function sendToMuse(ids: string[], opts: { shots?: number[]; onlyMi
     const project = await loadProject(id);
     const title = mv.idea.song_title || mv.idea.world_location;
     // Không chỉ rõ cảnh → bỏ qua cảnh đang chờ / đang làm (tránh gửi hai lần, tốn hai lượt).
-    // Cảnh còn chờ dán vào HaoHao (chưa tốn lượt) thì gửi lại qua cổng được.
+    // Cảnh còn chờ dán vào HaoHao (chưa tốn lượt) thì gửi lại qua Muse trong app được.
     const open = new Set(
       (state.mvs.find((m) => m.mv_id === id)?.shots ?? [])
         .filter((j) => !isFinal(j.status) && j.status !== "error" && !(gateway && j.status === "waiting" && !j.submitted))
@@ -162,7 +178,7 @@ export async function sendToMuse(ids: string[], opts: { shots?: number[]; onlyMi
         };
       }
       if (gateway) {
-        const job: MuseShotJob = { shot_no: s.shot_no, text, sent_at: now, status: "queued", step: "Đang gửi sang Cổng Muse", replaces, submitted: true };
+        const job: MuseShotJob = { shot_no: s.shot_no, text, sent_at: now, status: "queued", step: "Đang gửi sang Muse", replaces, submitted: true };
         toSubmit.push({ job, mv, shot: s, title });
         return job;
       }
@@ -176,27 +192,30 @@ export async function sendToMuse(ids: string[], opts: { shots?: number[]; onlyMi
     throw new UserError(opts.onlyMissing ? "Không có cảnh nào cần tạo: các cảnh chưa có clip đều đang được Muse làm (hoặc MV đã đủ clip)." : "Không có cảnh nào được chọn.");
   }
 
-  // Cổng Muse: gửi từng cảnh (trùng nội dung thì gửi một lần, các cảnh dùng chung task).
+  // Muse trong app: xếp từng cảnh vào hàng đợi (trùng nội dung thì một task, các cảnh dùng chung clip).
+  const engine = toSubmit.length ? museEngine() : null;
   const byText = new Map<string, string | Error>();
   for (const it of toSubmit) {
     let r = byText.get(it.job.text);
     if (r === undefined) {
       try {
-        r = await gatewaySubmit(settings.museGatewayUrl, {
+        r = engine!.store.add({
           prompt: it.job.text,
+          kind: "video",
           ratio: "16:9",
           label: `${it.title} · cảnh ${it.shot.shot_no}`,
           images: await shotImages(it.mv, it.shot),
-        });
+        }).id;
       } catch (err) {
         r = err as Error;
       }
       byText.set(it.job.text, r);
     }
-    if (typeof r === "string") Object.assign(it.job, { task_id: r, step: "Đã gửi sang Cổng Muse" });
-    else Object.assign(it.job, { status: "error", step: undefined, message: `Không gửi được sang Cổng Muse: ${r.message}` });
+    if (typeof r === "string") Object.assign(it.job, { task_id: r, step: "Đã xếp vào hàng đợi Muse" });
+    else Object.assign(it.job, { status: "error", step: undefined, message: `Không gửi được sang Muse: ${r.message}` });
   }
   const submitted = [...byText.values()].filter((r) => typeof r === "string").length;
+  if (submitted) engine!.worker.pump();
 
   await updateMuse((st) => {
     for (const p of planned) {
@@ -224,7 +243,7 @@ export async function sendToMuse(ids: string[], opts: { shots?: number[]; onlyMi
   };
 }
 
-/** Thôi theo dõi các cảnh (hoặc cả MV) — không đụng tới clip đã có, không đụng tới cổng / HaoHao. */
+/** Thôi theo dõi các cảnh (hoặc cả MV) — không đụng tới clip đã có, không đụng tới hàng đợi Muse / HaoHao. */
 export function forgetMuse(mvId: string, shots?: number[]): Promise<void> {
   return updateMuse((st) => {
     const mv = st.mvs.find((m) => m.mv_id === mvId);
@@ -261,12 +280,13 @@ async function importClip(src: MuseSource, mvId: string, job: MuseShotJob, task:
 }
 
 /**
- * Kiểm tra lại các cảnh gửi qua Cổng Muse bị báo lỗi: cổng đọc lại đúng phiên chat cũ, Muse đã làm xong thì tải video về
+ * Kiểm tra lại các cảnh gửi qua Muse trong app bị báo lỗi: đọc lại đúng phiên chat cũ, Muse đã làm xong thì tải video về
  * (không gửi lại — không tốn lượt). Trả về số cảnh đã yêu cầu kiểm tra lại.
  */
 export async function recheckMuse(mvId: string, shots?: number[]): Promise<number> {
   const settings = await readSettings();
-  if (settings.museMode !== "gateway") throw new UserError("Chỉ kiểm tra lại được khi gửi qua Cổng Muse.");
+  if (settings.museMode !== "gateway") throw new UserError("Chỉ kiểm tra lại được khi gửi qua Muse trong app.");
+  const { worker } = museEngine();
   const state = await readMuse();
   const jobs = (state.mvs.find((m) => m.mv_id === mvId)?.shots ?? []).filter(
     (j) => j.status === "error" && j.submitted && j.task_id && !j.import_error_task && (!shots || shots.includes(j.shot_no)),
@@ -275,7 +295,7 @@ export async function recheckMuse(mvId: string, shots?: number[]): Promise<numbe
   const errors: string[] = [];
   for (const id of new Set(jobs.map((j) => j.task_id!))) {
     try {
-      await gatewayRecheck(settings.museGatewayUrl, id);
+      worker.recheck(id);
       for (const j of jobs.filter((x) => x.task_id === id)) ok.set(j.shot_no, id);
     } catch (err) {
       errors.push((err as Error).message);
@@ -320,7 +340,7 @@ const defaultEnqueue = async (mvIds: string[]) => {
 const awaitingRender = (mv: MuseMV) => !mv.queued_at && mv.shots.length > 0 && mv.shots.every((s) => isFinal(s.status)) && mv.shots.some((s) => s.status === "done");
 
 /**
- * Một lượt dò: cập nhật trạng thái từ cổng / HaoHao, đưa clip đã xong vào MV, tự thêm MV đủ clip + có nhạc vào hàng chờ dựng.
+ * Một lượt dò: cập nhật trạng thái từ Muse trong app / HaoHao, đưa clip đã xong vào MV, tự thêm MV đủ clip + có nhạc vào hàng chờ dựng.
  * Trả về nhịp dò tiếp: "fast" (còn cảnh đang làm), "slow" (chỉ còn MV chờ bài hát), null (không cần dò nữa).
  */
 export function museTick(deps: TickDeps = {}): Promise<"fast" | "slow" | null> {
@@ -356,7 +376,7 @@ export function museTick(deps: TickDeps = {}): Promise<"fast" | "slow" | null> {
             mv.shots = mv.shots.map((job) => {
               if (isFinal(job.status)) return job;
               if (otherMode(job, gatewayMode)) return { ...job, message: OTHER_MODE[job.submitted ? "gateway" : "haohao"] };
-              // Cảnh gửi qua cổng mà gửi lỗi (chưa có task) → giữ nguyên lỗi.
+              // Cảnh gửi sang Muse mà gửi lỗi (chưa có task) → giữ nguyên lỗi.
               if (job.submitted && !job.task_id) return job;
               const current = job.message === OTHER_MODE.gateway || job.message === OTHER_MODE.haohao ? { ...job, message: undefined } : job;
               const r = advanceJob(current, pickTask(current, found));
@@ -406,7 +426,7 @@ export function museTick(deps: TickDeps = {}): Promise<"fast" | "slow" | null> {
 
     const shots = state.mvs.flatMap((m) => m.shots).filter((s) => !otherMode(s, gatewayMode));
     if (shots.some((s) => s.status === "waiting" || s.status === "queued" || s.status === "running")) return "fast";
-    // Chỉ còn cảnh lỗi (có thể được chạy lại bên HaoHao / cổng) hoặc MV chờ bài hát để tự dựng → dò thưa.
+    // Chỉ còn cảnh lỗi (có thể được chạy lại bên HaoHao / Muse) hoặc MV chờ bài hát để tự dựng → dò thưa.
     const retryable = shots.some((s) => s.status === "error" && !(s.submitted && !s.task_id));
     return retryable || (settings.museAutoRender && state.mvs.some(awaitingRender)) ? "slow" : null;
   });
@@ -457,8 +477,8 @@ export function ensureMuseWatch(wake = true): void {
 export interface MuseView {
   mode: Settings["museMode"];
   mvs: MuseMV[];
-  /** Tình trạng Cổng Muse (khi gửi qua cổng). */
-  gateway: GatewayStatus | null;
+  /** Tình trạng Muse trong app (đăng nhập, hàng đợi, lý do đang dừng). */
+  gateway: EngineStatus | null;
   /** Tình trạng HaoHao (khi dán tay vào HaoHao). */
   haohao: HaoHaoInfo | null;
   /** Lỗi ở lượt dò gần nhất. */
@@ -471,11 +491,8 @@ export interface MuseView {
 export async function museView(mvId?: string): Promise<MuseView> {
   const settings = await readSettings();
   const gateway = settings.museMode === "gateway";
-  const [state, gw, haohao] = await Promise.all([
-    readMuse(),
-    gateway ? gatewayStatus(settings.museGatewayUrl) : null,
-    gateway ? null : haohaoInfo(haohaoDir(settings.museDataDir)),
-  ]);
+  const [state, haohao] = await Promise.all([readMuse(), gateway ? null : haohaoInfo(haohaoDir(settings.museDataDir))]);
+  const gw = gateway ? engineStatus() : null;
   if (state.mvs.length) ensureMuseWatch(false);
   return {
     mode: settings.museMode,

@@ -1,5 +1,5 @@
-// "Muse giả" cho test Cổng Muse: không mở Chrome, không tốn lượt. Mỗi lệnh gửi lên thành một phiên "running"; test tự cho xong / lỗi.
-import type { Attachment, MuseDriver, MuseFile, Quota } from "../gateway/musePage.ts";
+// "Muse giả" cho test Muse trong app: không mở Chrome, không tốn lượt. Mỗi lệnh gửi lên thành một phiên "running"; test tự cho xong / lỗi.
+import type { Attachment, MuseDriver, MuseFile, Quota } from "@/lib/museEngine/page";
 
 export class FakeMuse implements MuseDriver {
   loggedIn = true;

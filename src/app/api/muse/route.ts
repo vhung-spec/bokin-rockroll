@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { UserError } from "@/lib/errors";
 import { errorResponse, readJsonBody } from "@/lib/http";
-import { gatewayCheck, gatewayLogin } from "@/lib/museGateway";
+import { museEngine } from "@/lib/museEngine";
 import { ensureMuseWatch, forgetMuse, museTick, museView, recheckMuse, reimportMuse, sendToMuse } from "@/lib/museJobs";
 import { readSettings } from "@/lib/store";
 
 // ?mv=<id> (GET và POST): chỉ trả tiến độ của MV đó (trang Ghép video của MV); không có = mọi MV.
 const onlyMv = (req: Request) => new URL(req.url).searchParams.get("mv") ?? undefined;
 
-/** Tiến độ tạo clip bằng Muse + tình trạng Cổng Muse / HaoHao. */
+/** Tiến độ tạo clip bằng Muse + tình trạng Muse trong app / HaoHao. */
 export async function GET(req: Request) {
   try {
     return NextResponse.json(await museView(onlyMv(req)));
@@ -19,17 +19,19 @@ export async function GET(req: Request) {
 
 const shotList = (raw: unknown) => (Array.isArray(raw) ? raw.map(Number).filter((n) => Number.isInteger(n) && n > 0) : undefined);
 
-async function gatewayUrl() {
-  const s = await readSettings();
-  if (s.museMode !== "gateway") throw new UserError("Đang dùng cách dán tay vào HaoHao — chọn “Cổng Muse” trong Cài đặt để dùng lệnh này.");
-  return s.museGatewayUrl;
+async function engineMode() {
+  if ((await readSettings()).museMode !== "gateway") {
+    throw new UserError("Đang dùng cách dán tay vào HaoHao — chọn “Tự động (Muse trong app)” trong Cài đặt để dùng lệnh này.");
+  }
+  return museEngine();
 }
 
 /**
  * { action: "send", ids, shots?, onlyMissing? } → { sent, text, count, reused, …, view }
  * { action: "forget", id, shots? } · { action: "reimport", id, shots? } (nhận lại clip đã xong mà đưa vào MV lỗi)
- * { action: "recheck", id, shots? } (Cổng Muse đọc lại phiên cũ của cảnh lỗi, không gửi lại) · { action: "check" } (dò ngay; với Cổng Muse: kiểm tra lại đăng nhập + hạn mức)
- * { action: "login" } (Cổng Muse mở Chrome để đăng nhập Muse) → view
+ * { action: "recheck", id, shots? } (đọc lại phiên cũ của cảnh lỗi, không gửi lại)
+ * { action: "check" } (dò ngay; Muse trong app: kiểm tra lại đăng nhập, chạy tiếp nếu đang dừng vì hết hạn mức)
+ * { action: "login" } (mở Chrome của Muse để đăng nhập) → view
  */
 export async function POST(req: Request) {
   try {
@@ -51,10 +53,10 @@ export async function POST(req: Request) {
         await recheckMuse(String(body.id ?? ""), shotList(body.shots));
         break;
       case "login":
-        await gatewayLogin(await gatewayUrl());
+        void (await engineMode()).worker.login();
         break;
       case "check":
-        if ((await readSettings()).museMode === "gateway") await gatewayCheck(await gatewayUrl());
+        if ((await readSettings()).museMode === "gateway") await (await engineMode()).worker.check();
         await museTick();
         ensureMuseWatch();
         break;

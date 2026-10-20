@@ -132,12 +132,12 @@ export interface Settings {
   channelVoice: string;
   engine: Engine;
   songStructure: SongSection[];
-  /** Cách gửi cảnh sang Muse: "gateway" = Cổng Muse tự gửi; "haohao" = copy prompt để dán vào HaoHao. */
+  /** Cách gửi cảnh sang Muse: "gateway" = Muse chạy trong app, tự gửi; "haohao" = copy prompt để dán vào HaoHao. */
   museMode: "gateway" | "haohao";
-  /** Địa chỉ Cổng Muse (chỉ trên máy này). */
-  museGatewayUrl: string;
   /** Thư mục dữ liệu của tool HaoHao (chứa tasks.json); "" = tự tìm. */
   museDataDir: string;
+  /** Thư mục nhạc: MV chưa có bài hát thì app tự tìm bài trùng tên trong đây; "" = không tự ghép. */
+  songDir: string;
   /** MV đủ clip Muse + có bài hát → tự thêm vào hàng chờ dựng và chạy. */
   museAutoRender: boolean;
   /** Ghép negative prompt vào cuối chữ gửi Muse ("Avoid: …") vì Muse không có ô negative riêng. */

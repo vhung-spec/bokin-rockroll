@@ -2,11 +2,11 @@
 // Gửi lệnh bằng chính client chat của Muse (mỗi lệnh một chat mới), đọc tiến độ qua RPC của Muse (sessions.list / chat.history / chat.cancel),
 // tải file kết quả qua fs.raw từng đoạn 2 MB (base64). Chuyển từ engine/muse-page.js của HaoHao.
 
-import type { Chrome } from "./chrome.ts";
+import type { Chrome } from "./chrome";
 
 export const CHUNK = 2 * 1024 * 1024;
 
-// Chạy TRONG trang Muse (chuỗi JS thuần, không phải mã của cổng). Không dùng template literal bên trong.
+// Chạy TRONG trang Muse (chuỗi JS thuần, không phải mã của app). Không dùng template literal bên trong.
 const PAGE_MAIN = String.raw`function (CHUNK) {
   const rt = () => window.__hatchEarlyGatewayRuntimeState.activeRuntime.getSnapshot();
   // Object chat của Muse: tìm trong cây React (memoizedProps.value có sendMessage + ensureActiveChatSendReady)
@@ -164,7 +164,7 @@ export interface Quota {
   checkedAt: number;
 }
 
-/** Những gì cổng cần từ trang Muse — Chrome thật (MusePage) hoặc Muse giả khi test. */
+/** Những gì app cần từ trang Muse — Chrome thật (MusePage) hoặc Muse giả khi test. */
 export interface MuseDriver {
   login(): Promise<{ loggedIn: boolean }>;
   send(text: string, atts: Attachment[]): Promise<{ ok: boolean; sessionId: string; reason: string }>;
@@ -177,7 +177,7 @@ export interface MuseDriver {
   show(): Promise<void>;
   hide(): Promise<void>;
   close(): Promise<void>;
-  /** Người dùng tự đóng cửa sổ Chrome của cổng (tới khi bấm Đăng nhập lại thì không tự mở Chrome nữa). */
+  /** Người dùng tự đóng cửa sổ Chrome của Muse (tới khi bấm Đăng nhập lại thì không tự mở Chrome nữa). */
   onUserClose(fn: () => void): void;
   /** Chẩn đoán (không bắt buộc): tóm tắt các sự kiện của một phiên chat. */
   history?(sessionId: string): Promise<unknown>;
@@ -245,7 +245,7 @@ export function weeklyOut(q: Quota | null): boolean {
   return q.pct >= 100 || /EXHAUST|EXCEED|DEPLET|LIMIT|OUT|BLOCK/i.test(q.status);
 }
 
-/** Trang Muse thật, chạy trong Chrome của cổng. */
+/** Trang Muse thật, chạy trong Chrome của Muse. */
 export class MusePage implements MuseDriver {
   chrome: Chrome;
 

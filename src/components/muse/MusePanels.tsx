@@ -36,7 +36,7 @@ export function useMuse(mvId?: string) {
   return { view, setView, error, setError, reload, url };
 }
 
-/** Gửi qua Cổng Muse = tốn lượt ngay → hỏi lại. Dán tay vào HaoHao thì chưa tốn gì cho tới lúc dán. */
+/** Gửi qua Muse trong app = tốn lượt ngay → hỏi lại. Dán tay vào HaoHao thì chưa tốn gì cho tới lúc dán. */
 export function confirmSend(view: MuseView | null, shots: number, again = false): boolean {
   if (view?.mode === "gateway") {
     return confirm(`${again ? "Gửi lại" : "Gửi"} ${shots} cảnh sang Muse ngay bây giờ? Mỗi cảnh dùng một lượt Muse (tính vào hạn mức tuần của tài khoản Meta).`);
@@ -45,7 +45,7 @@ export function confirmSend(view: MuseView | null, shots: number, again = false)
   return shots <= 30 || confirm(`Khoảng ${shots} cảnh sẽ được copy để dán vào HaoHao — mỗi cảnh một lượt Muse. Tiếp tục?`);
 }
 
-/** Tình trạng Cổng Muse (đăng nhập, hạn mức, nút Đăng nhập / Kiểm tra) hoặc HaoHao. */
+/** Tình trạng Muse trong app (đăng nhập, hàng đợi, nút Đăng nhập / Kiểm tra) hoặc HaoHao. */
 export function MuseStatus({ view, url, onView }: { view: MuseView; url: string; onView: (v: MuseView) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,24 +70,20 @@ export function MuseStatus({ view, url, onView }: { view: MuseView; url: string;
     </p>
   );
 
-  if (view.mode === "gateway") {
+  if (view.mode === "gateway" && view.gateway) {
     const g = view.gateway;
-    if (!g?.reachable) {
-      return (
-        <div className="space-y-1 text-sm">
-          <p className="text-cherry-dark">✗ {g?.error ?? "Chưa kết nối được Cổng Muse."}</p>
-          {settingsLine}
-        </div>
-      );
-    }
     const q = g.quota;
     const waiting = (g.counts.queued ?? 0) + (g.counts.processing ?? 0);
     return (
       <div className="space-y-1 text-sm">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="badge border-mint-dark/50 bg-mint/30">✓ Cổng Muse đang chạy</span>
+          {g.fake ? (
+            <span className="badge border-amber-500 bg-amber-100 text-amber-900">Muse GIẢ (MUSE_FAKE) — chỉ để xem thử, không tốn lượt</span>
+          ) : (
+            <span className="badge border-mint-dark/50 bg-mint/30">✓ Muse chạy trong app</span>
+          )}
           {g.loggingIn ? (
-            <span className="badge border-sky-400 bg-sky-100 text-sky-900">Đang chờ bạn đăng nhập trong cửa sổ Chrome của cổng…</span>
+            <span className="badge border-sky-400 bg-sky-100 text-sky-900">Đang chờ bạn đăng nhập trong cửa sổ Chrome của Muse…</span>
           ) : g.loggedIn ? (
             <span className="badge border-mint-dark/50 bg-mint/30">Đã đăng nhập Muse</span>
           ) : g.loggedIn === false ? (
@@ -95,14 +91,20 @@ export function MuseStatus({ view, url, onView }: { view: MuseView; url: string;
           ) : (
             <span className="badge border-ink/30 bg-cream">Chưa kiểm tra đăng nhập</span>
           )}
-          {q && (
+          {q ? (
             <span className="text-xs text-muted">
               {q.tier && `${q.tier} · `}đã dùng {q.pct}% hạn mức tuần{q.resetsAt ? ` · đặt lại ${new Date(q.resetsAt).toLocaleDateString("vi-VN")}` : ""}
             </span>
+          ) : (
+            !g.fake && (
+              <span className="text-xs text-muted" title="Trang Muse không còn cho xem % hạn mức. App tự dừng gửi khi Muse báo hết hạn mức.">
+                (Muse không cho xem % hạn mức — app tự dừng khi Muse báo hết)
+              </span>
+            )
           )}
-          {waiting > 0 && <span className="text-xs text-muted">· hàng đợi của cổng: {waiting}</span>}
+          {waiting > 0 && <span className="text-xs text-muted">· hàng đợi Muse: {waiting}</span>}
           <span className="ml-auto flex gap-2">
-            <button className="btn-ghost btn-sm" disabled={busy} onClick={() => void act("login")} title="Mở cửa sổ Chrome của cổng để đăng nhập Muse">
+            <button className="btn-ghost btn-sm" disabled={busy} onClick={() => void act("login")} title="Mở cửa sổ Chrome của Muse để đăng nhập">
               Đăng nhập Muse
             </button>
             <button className="btn-ghost btn-sm" disabled={busy} onClick={() => void act("check")} title="Kiểm tra lại đăng nhập và hạn mức">
@@ -148,7 +150,7 @@ export function MuseStatus({ view, url, onView }: { view: MuseView; url: string;
   );
 }
 
-/** Sau khi bấm gửi: Cổng Muse = báo đã gửi; HaoHao = chữ đã copy + các bước dán. */
+/** Sau khi bấm gửi: Muse trong app = báo đã gửi; HaoHao = chữ đã copy + các bước dán. */
 export function PasteBox({ result, onClose }: { result: SendResult; onClose: () => void }) {
   const [copied, setCopied] = useState<boolean | null>(null);
   const once = useRef(false);
@@ -168,7 +170,7 @@ export function PasteBox({ result, onClose }: { result: SendResult; onClose: () 
 
   const headline = result.sent
     ? result.count
-      ? `Đã gửi ${result.count} cảnh sang Muse qua Cổng Muse (${result.count} lượt). Theo dõi tiến độ bên dưới.`
+      ? `Đã gửi ${result.count} cảnh sang Muse (${result.count} lượt). Theo dõi tiến độ bên dưới.`
       : "Không gửi cảnh nào mới."
     : result.count
       ? `${result.count} prompt cần dán vào HaoHao (${result.count} lượt Muse)`
@@ -223,7 +225,7 @@ export function MuseShots({
   onResend: (shots: number[]) => void;
   /** Nhận lại clip của cảnh Muse đã làm xong mà đưa vào MV bị lỗi (không tốn lượt). */
   onReimport: (shots: number[]) => void;
-  /** Cổng Muse đọc lại phiên chat cũ của cảnh lỗi (không gửi lại, không tốn lượt). */
+  /** Đọc lại phiên chat Muse cũ của cảnh lỗi (không gửi lại, không tốn lượt). */
   onRecheck: (shots: number[]) => void;
   onForget: () => void;
   showTitle?: boolean;
@@ -270,7 +272,7 @@ export function MuseShots({
               ↻ Gửi lại {errors.length} cảnh lỗi
             </button>
           )}
-          <button className="btn-ghost btn-sm" disabled={busy} onClick={onForget} title="Thôi theo dõi (không xoá clip đã có, không huỷ việc bên cổng / HaoHao)">
+          <button className="btn-ghost btn-sm" disabled={busy} onClick={onForget} title="Thôi theo dõi (không xoá clip đã có, không huỷ việc đang làm bên Muse / HaoHao)">
             Bỏ theo dõi
           </button>
         </div>
@@ -383,7 +385,7 @@ export function MuseCard({ mvId, missing, onClips }: { mvId: string; missing: nu
           ) : (
             <p className="text-sm text-muted">
               {gateway
-                ? "Muse (Meta) làm clip qua Cổng Muse: app gửi từng cảnh (kèm ảnh nhân vật nếu có), clip nào xong tự vào đúng cảnh."
+                ? "Muse (Meta) làm clip ngay trong app: app gửi từng cảnh (kèm ảnh nhân vật nếu có), clip nào xong tự vào đúng cảnh."
                 : "Muse (Meta) làm clip qua tool HaoHao: app copy sẵn prompt của các cảnh, bạn dán vào HaoHao một lần; clip nào xong tự vào đúng cảnh."}
             </p>
           )}

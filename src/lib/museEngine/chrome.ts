@@ -1,6 +1,7 @@
-// CHROME — mở Google Chrome thật của máy với profile riêng của cổng, điều khiển qua CDP bằng pipe
-// (fd 3 = cổng ghi lệnh, fd 4 = Chrome trả lời; mỗi tin là JSON kết thúc bằng \0). Không mở cổng debug nào ra mạng.
-// Chrome 136+ không cho điều khiển profile chính → cổng dùng thư mục profile riêng (người dùng tự đăng nhập Muse trong đó).
+// CHROME — mở Google Chrome thật của máy với profile riêng, điều khiển qua CDP bằng pipe (chỉ dùng phía server)
+// (fd 3 = app ghi lệnh, fd 4 = Chrome trả lời; mỗi tin là JSON kết thúc bằng \0). Không mở cổng debug nào ra mạng.
+// Chrome 136+ không cho điều khiển profile chính → dùng thư mục profile riêng (người dùng tự đăng nhập Muse trong đó).
+// Tiến trình của app tắt thì Chrome này cũng tự tắt (pipe bị đóng).
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
@@ -18,7 +19,7 @@ export function findChrome(): string | null {
     : process.platform === "win32"
       ? [process.env.PROGRAMFILES, process.env["PROGRAMFILES(X86)"], process.env.LOCALAPPDATA]
           .filter((d): d is string => Boolean(d))
-          .map((d) => path.join(d, "Google", "Chrome", "Application", "chrome.exe"))
+          .map((d) => path.join(/*turbopackIgnore: true*/ d, "Google", "Chrome", "Application", "chrome.exe"))
       : ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium"];
   return list.find((p) => existsSync(p)) ?? null;
 }
@@ -54,7 +55,7 @@ export interface ChromeOptions {
   chromePath?: string | null;
 }
 
-/** Sự kiện "exit" { byUser }: Chrome đã tắt — byUser = người dùng tự đóng cửa sổ (không phải cổng đóng). */
+/** Sự kiện "exit" { byUser }: Chrome đã tắt — byUser = người dùng tự đóng cửa sổ (không phải app đóng). */
 export class Chrome extends EventEmitter {
   profileDir: string;
   url: string;
@@ -89,10 +90,10 @@ export class Chrome extends EventEmitter {
 
   private async launch(): Promise<void> {
     if (this.proc) return this.attach();
-    if (!this.chromePath || !existsSync(this.chromePath)) throw new Error("Không tìm thấy Google Chrome — cài Google Chrome rồi mở lại cổng.");
+    if (!this.chromePath || !existsSync(this.chromePath)) throw new Error("Không tìm thấy Google Chrome — cài Google Chrome rồi mở lại app.");
     mkdirSync(this.profileDir, { recursive: true });
     const proc = spawn(
-      this.chromePath,
+      /*turbopackIgnore: true*/ this.chromePath,
       [
         `--user-data-dir=${this.profileDir}`,
         "--remote-debugging-pipe",
