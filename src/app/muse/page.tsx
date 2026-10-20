@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { HaoHaoStatus, MuseShots, PasteBox, useMuse } from "@/components/muse/MusePanels";
+import { MuseShots, MuseStatus, PasteBox, confirmSend, useMuse } from "@/components/muse/MusePanels";
 import { Card, ErrorBox, Spinner } from "@/components/ui";
 import { api } from "@/lib/client";
 import { museCounts } from "@/lib/muse";
@@ -19,7 +19,8 @@ interface Candidate {
 }
 
 export default function MusePage() {
-  const { view, setView, error, setError } = useMuse();
+  const { view, setView, error, setError, url } = useMuse();
+  const gateway = view?.mode === "gateway";
   const [mvs, setMvs] = useState<Candidate[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [onlyMissing, setOnlyMissing] = useState(true);
@@ -53,7 +54,7 @@ export default function MusePage() {
   async function send() {
     const ids = [...selected];
     const shots = (mvs ?? []).filter((m) => selected.has(m.id)).reduce((n, m) => n + (onlyMissing ? Math.max(0, m.shot_count - m.clip_count) : m.shot_count), 0);
-    if (shots > 30 && !confirm(`Khoảng ${shots} cảnh sẽ được gửi sang Muse — mỗi cảnh một lượt Muse của tài khoản Meta. Tiếp tục?`)) return;
+    if (!confirmSend(view, shots)) return;
     setBusy(true);
     setError(null);
     try {
@@ -81,7 +82,7 @@ export default function MusePage() {
   }
 
   async function resend(mvId: string, shots: number[]) {
-    if (!confirm(`Gửi lại ${shots.length} cảnh sang Muse? Mỗi cảnh tốn thêm một lượt Muse.`)) return;
+    if (!confirmSend(view, shots.length, true)) return;
     setBusy(true);
     setError(null);
     try {
@@ -100,14 +101,22 @@ export default function MusePage() {
       <div>
         <h1 className="text-3xl uppercase">Tạo clip bằng Muse</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">
-          Muse (Meta) làm clip qua tool <b>HaoHao</b>. Chọn MV → app copy sẵn prompt của các cảnh → bạn dán vào HaoHao <b>một lần</b>. Clip nào Muse làm xong,
-          app tự đưa vào đúng cảnh của đúng MV; MV đủ clip và có bài hát thì tự vào hàng chờ dựng. Tắt app giữa chừng không sao: HaoHao vẫn làm, mở lại app là
-          nhận tiếp.
+          {gateway ? (
+            <>
+              Muse (Meta) làm clip qua <b>Cổng Muse</b> chạy trên máy này. Chọn MV → app <b>tự gửi</b> từng cảnh (kèm ảnh nhân vật nếu có).
+            </>
+          ) : (
+            <>
+              Muse (Meta) làm clip qua tool <b>HaoHao</b>. Chọn MV → app copy sẵn prompt của các cảnh → bạn dán vào HaoHao <b>một lần</b>.
+            </>
+          )}{" "}
+          Clip nào Muse làm xong, app tự đưa vào đúng cảnh của đúng MV; MV đủ clip và có bài hát thì tự vào hàng chờ dựng. Tắt app giữa chừng không sao: mở lại
+          app là nhận tiếp.
         </p>
       </div>
       <ErrorBox error={error} />
 
-      <Card title="HaoHao">{view ? <HaoHaoStatus view={view} /> : <Spinner />}</Card>
+      <Card title={gateway ? "Cổng Muse" : "HaoHao"}>{view ? <MuseStatus view={view} url={url} onView={setView} /> : <Spinner />}</Card>
 
       <Card
         title="1. Chọn MV"
@@ -201,9 +210,11 @@ export default function MusePage() {
             Chỉ cảnh chưa có clip
           </label>
           <button className="btn-primary" disabled={!selected.size || busy} onClick={() => void send()} data-testid="muse-send">
-            {busy && <Spinner />} 🎬 Tạo clip bằng Muse ({selected.size} MV)
+            {busy && <Spinner />} 🎬 {gateway ? "Gửi sang Muse" : "Tạo clip bằng Muse"} ({selected.size} MV)
           </button>
-          <span className="text-xs text-muted">Mỗi prompt dán vào HaoHao là một lượt Muse (tính vào hạn mức tài khoản Meta của bạn).</span>
+          <span className="text-xs text-muted">
+            {gateway ? "Mỗi cảnh gửi đi" : "Mỗi prompt dán vào HaoHao"} là một lượt Muse (tính vào hạn mức tuần của tài khoản Meta).
+          </span>
         </div>
         {result && (
           <div className="mt-3">
@@ -217,7 +228,7 @@ export default function MusePage() {
         actions={
           view?.mvs.length ? (
             <button className="btn-ghost btn-sm" disabled={busy} onClick={() => void post({ action: "check" })}>
-              ↻ Dò HaoHao ngay
+              ↻ Dò ngay
             </button>
           ) : undefined
         }
@@ -230,7 +241,14 @@ export default function MusePage() {
           <div className="space-y-4">
             {view.mvs.map((m) => (
               <div key={m.mv_id} className="rounded-lg border border-ink/15 p-3">
-                <MuseShots mv={m} busy={busy} showTitle onResend={(s) => void resend(m.mv_id, s)} onForget={() => void post({ action: "forget", id: m.mv_id })} />
+                <MuseShots
+                  mv={m}
+                  busy={busy}
+                  showTitle
+                  onResend={(s) => void resend(m.mv_id, s)}
+                  onReimport={(s) => void post({ action: "reimport", id: m.mv_id, shots: s })}
+                  onForget={() => void post({ action: "forget", id: m.mv_id })}
+                />
               </div>
             ))}
           </div>

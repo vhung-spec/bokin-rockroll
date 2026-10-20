@@ -50,7 +50,7 @@
     "prompt_style": "One or two continuous descriptive sentences: camera move, subject and action, setting and light. Positive phrasing only (no 'no ...' clauses)."
   },
   "muse": {
-    "name": "Meta Muse (qua HaoHao)",
+    "name": "Meta Muse",
     "max_prompt_chars": 2000,
     "target_prompt_chars": 1000,
     "default_clip_len": 10,

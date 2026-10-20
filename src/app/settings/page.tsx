@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import ApiKeyCard from "@/components/settings/ApiKeyCard";
 import EngineCard from "@/components/settings/EngineCard";
 import PricingCard from "@/components/settings/PricingCard";
-import { HaoHaoStatus } from "@/components/muse/MusePanels";
+import { MuseStatus } from "@/components/muse/MusePanels";
 import { Card, ErrorBox, Field, Spinner } from "@/components/ui";
 import { api } from "@/lib/client";
 import type { MuseView } from "@/lib/museJobs";
@@ -187,16 +187,38 @@ export default function SettingsPage() {
           )}
         </Card>
 
-        <Card title="Muse (qua HaoHao)" className="lg:col-span-2">
+        <Card title="Tạo clip bằng Muse" className="lg:col-span-2">
           <p className="mb-3 text-xs text-muted">
-            Muse (Meta) làm clip qua tool HaoHao. App chỉ <b>đọc</b> hàng đợi của HaoHao (tasks.json) để biết clip nào xong rồi đưa vào đúng cảnh — không sửa gì
-            bên HaoHao. Nên chọn công cụ video “Meta Muse (qua HaoHao)” ở trên để prompt viết đúng kiểu Muse.
+            Muse (Meta) làm clip từ prompt của từng cảnh; clip xong được đưa vào đúng cảnh của đúng MV. Nên chọn công cụ video “Meta Muse” ở trên để prompt viết
+            đúng kiểu Muse.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Thư mục dữ liệu HaoHao" hint={`Thư mục có file tasks.json. Để trống = tự tìm (${muse?.defaultDir ?? "…"}).`}>
-              <input className="input" value={s.museDataDir} placeholder={muse?.defaultDir} onChange={(e) => set("museDataDir", e.target.value)} />
-            </Field>
-            <div className="pt-5">
+            <div className="space-y-2">
+              <span className="label">Cách gửi sang Muse</span>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="radio" name="museMode" className="mt-1" checked={s.museMode === "gateway"} onChange={() => set("museMode", "gateway")} />
+                <span>
+                  <b>Cổng Muse (tự động)</b> — app tự gửi từng cảnh qua Cổng Muse chạy trên máy này (file khởi động tự mở cổng). Bạn đăng nhập Muse một lần
+                  trong cửa sổ Chrome của cổng.
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="radio" name="museMode" className="mt-1" checked={s.museMode === "haohao"} onChange={() => set("museMode", "haohao")} />
+                <span>
+                  <b>HaoHao (dán tay)</b> — app copy prompt để bạn dán vào HaoHao; app chỉ <b>đọc</b> hàng đợi của HaoHao để nhận clip, không sửa gì bên HaoHao.
+                </span>
+              </label>
+            </div>
+            {s.museMode === "gateway" ? (
+              <Field label="Địa chỉ Cổng Muse" hint="Mặc định http://127.0.0.1:18700 — chỉ trên máy này.">
+                <input className="input" value={s.museGatewayUrl} onChange={(e) => set("museGatewayUrl", e.target.value)} />
+              </Field>
+            ) : (
+              <Field label="Thư mục dữ liệu HaoHao" hint={`Thư mục có file tasks.json. Để trống = tự tìm (${muse?.defaultDir ?? "…"}).`}>
+                <input className="input" value={s.museDataDir} placeholder={muse?.defaultDir} onChange={(e) => set("museDataDir", e.target.value)} />
+              </Field>
+            )}
+            <div className="md:col-span-2">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={s.museAutoRender} onChange={(e) => set("museAutoRender", e.target.checked)} />
                 MV đủ clip + có bài hát → tự thêm vào hàng chờ dựng và chạy
@@ -209,7 +231,8 @@ export default function SettingsPage() {
           </div>
           {muse && (
             <div className="mt-3">
-              <HaoHaoStatus view={muse} />
+              {muse.mode !== s.museMode && <p className="mb-1 text-xs text-amber-800">Bấm “Lưu cài đặt” để kiểm tra theo cách gửi vừa chọn.</p>}
+              <MuseStatus view={muse} url="/api/muse" onView={setMuse} />
             </div>
           )}
         </Card>

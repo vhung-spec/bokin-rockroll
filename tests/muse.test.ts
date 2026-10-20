@@ -1,21 +1,25 @@
 // Tạo clip bằng Muse qua HaoHao, thử với một "HaoHao giả": test tự viết tasks.json như HaoHao (không mở HaoHao, không tốn lượt Muse).
 // Khớp task với cảnh, nhận clip về đúng cảnh, giữ clip người dùng tự thêm, gửi lại cảnh lỗi, nhận video có sẵn, tự thêm vào hàng chờ dựng.
 import { spawnSync } from "node:child_process";
-import { cpSync, createReadStream, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { cpSync, createReadStream, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { MuseShotJob, MuseTask } from "@/lib/muse";
 import type { MVResult } from "@/lib/types";
+import { waitFor } from "./fakeMuse";
 
 const tmp = mkdtempSync(path.join(tmpdir(), "mvps-muse-"));
 for (const f of readdirSync("data").filter((f) => f.endsWith(".json"))) cpSync(path.join("data", f), path.join(tmp, f));
 const hao = path.join(tmp, "HaoHao");
 const out = path.join(hao, "Videos");
 const settingsFile = path.join(tmp, "settings.json");
-writeFileSync(settingsFile, JSON.stringify({ ...JSON.parse(readFileSync(settingsFile, "utf8")), engine: "demo", museDataDir: hao, museAutoRender: true, museAvoid: true }));
+const baseSettings = { ...JSON.parse(readFileSync(settingsFile, "utf8")), engine: "demo", museMode: "haohao", museDataDir: hao, museAutoRender: true, museAvoid: true };
+const setSettings = (patch: Record<string, unknown> = {}) => writeFileSync(settingsFile, JSON.stringify({ ...baseSettings, ...patch }));
+setSettings();
 process.env.MV_DATA_DIR = tmp;
+process.env.MUSE_NO_WATCH = "1"; // không chạy vòng dò nền: test tự gọi museTick từng lượt
 
 let muse: typeof import("@/lib/muse");
 let jobs: typeof import("@/lib/museJobs");
@@ -261,6 +265,26 @@ describe("HaoHao giả → clip vào đúng cảnh", () => {
     expect((await media.loadProject(mv.id)).clips["5"]).toBeDefined();
   }, 60000);
 
+  it("đưa clip vào MV lỗi → Nhận lại clip (không gửi lại, không tốn lượt)", async () => {
+    await media.removeClip(mv.id, 7);
+    const r = await jobs.sendToMuse([mv.id], { onlyMissing: true });
+    expect(r).toMatchObject({ count: 0, reused: 1 });
+    const task = fake.find((t) => t.prompt === textOf(7) && t.status === "succeeded")!;
+    const file = task.files![0];
+    renameSync(file, `${file}.tam`); // file tạm thời không đọc được
+    await tick();
+    expect(await job(7)).toMatchObject({ status: "error", import_error_task: task.id });
+    await tick();
+    expect((await job(7)).status).toBe("error"); // không tự thử lại liên tục
+
+    renameSync(`${file}.tam`, file);
+    expect(await jobs.reimportMuse(mv.id)).toBe(1);
+    await tick();
+    expect(await job(7)).toMatchObject({ status: "done" });
+    expect((await media.loadProject(mv.id)).clips["7"]).toBeDefined();
+    expect(fake.filter((t) => t.prompt === textOf(7))).toHaveLength(1); // không có task mới bên HaoHao
+  }, 60000);
+
   it("MV bị xoá → thôi theo dõi; không thấy HaoHao → báo rõ", async () => {
     const gen = await import("@/lib/generate");
     const other = await gen.generateMV({ id: "2", world_location: "Santa Monica Pier Summer 1955", theme_code: "T01", outline: "Hẹn hò" });
@@ -276,5 +300,69 @@ describe("HaoHao giả → clip vào đúng cảnh", () => {
     const info = await haohaoInfo(hao);
     expect(info).toMatchObject({ found: true, outputIsDefault: true });
     expect(info.tasks).toBeGreaterThan(0);
+  }, 60000);
+});
+
+describe("Cổng Muse (gửi tự động) → clip vào đúng cảnh", () => {
+  it("chưa mở cổng → báo rõ, không ghi nhận cảnh nào", async () => {
+    setSettings({ museMode: "gateway", museGatewayUrl: "http://127.0.0.1:9" });
+    const gen = await import("@/lib/generate");
+    const other = await gen.generateMV({ id: "3", world_location: "Times Square Winter 1956", theme_code: "T01", outline: "Gặp lại" });
+    await expect(jobs.sendToMuse([other.id], { shots: [1] })).rejects.toThrow(/Chưa kết nối được Cổng Muse/);
+    expect((await jobs.readMuse()).mvs.some((m) => m.mv_id === other.id)).toBe(false);
+  });
+
+  it("app tự gửi cảnh (kèm ảnh nhân vật) → Muse giả làm xong → clip vào MV", async () => {
+    const { createGateway } = await import("../gateway/server.ts");
+    const { FakeMuse, FAST } = await import("./fakeMuse");
+    const gen = await import("@/lib/generate");
+    const fake = new FakeMuse(readFileSync(clip));
+    const gw = await createGateway({ dir: path.join(tmp, "gateway"), port: 0, page: fake, worker: FAST });
+    try {
+      setSettings({ museMode: "gateway", museGatewayUrl: gw.url });
+      const m = await gen.generateMV({ id: "4", world_location: "Route 66 Summer 1957", theme_code: "T01", outline: "Đi xe dọc đường 66" });
+      // Ảnh tham chiếu của nhân vật có trong cảnh đầu tiên.
+      const s1 = m.shots[0];
+      const who = s1.characters_in_shot[0] ?? m.character_bible.characters[0].id;
+      if (!s1.characters_in_shot.length) s1.characters_in_shot.push(who);
+      await store.saveMV(m);
+      mkdirSync(path.join(store.UPLOAD_DIR(), m.id), { recursive: true });
+      writeFileSync(path.join(store.UPLOAD_DIR(), m.id, "ref.png"), "png-bytes");
+      await gen.setReferenceImages(m.id, who, [`data/uploads/${m.id}/ref.png`]);
+
+      const r = await jobs.sendToMuse([m.id], { shots: [s1.shot_no, m.shots[1].shot_no] });
+      expect(r).toMatchObject({ sent: true, text: "", count: 2, failed: 0 });
+      // Cổng làm lần lượt: gửi cảnh 1, chờ xong rồi mới gửi cảnh 2.
+      await waitFor(() => fake.sent.length === 1, 5000, "cổng gửi lệnh đầu");
+      expect(fake.sent[0].text).toBe(`Tạo video · tỷ lệ 16:9 ngang\n${muse.museText(s1, { avoid: true })}`);
+      expect(fake.sent[0].atts).toHaveLength(1);
+      expect(Buffer.from(fake.sent[0].atts[0].dataBase64, "base64").toString()).toBe("png-bytes");
+
+      await tick();
+      const state = (await jobs.readMuse()).mvs.find((x) => x.mv_id === m.id)!;
+      expect(state.shots.map((s) => [s.submitted, Boolean(s.task_id), s.status])).toEqual([
+        [true, true, "running"],
+        [true, true, "queued"],
+      ]);
+
+      fake.finish(1);
+      await waitFor(() => fake.sent.length === 2, 5000, "cổng gửi lệnh thứ hai");
+      fake.finish(2);
+      await waitFor(async () => gw.store.list("succeeded").length === 2, 5000, "cổng tải xong");
+      await tick();
+      const after = (await jobs.readMuse()).mvs.find((x) => x.mv_id === m.id)!;
+      expect(after.shots.map((s) => s.status)).toEqual(["done", "done"]);
+      const p = await media.loadProject(m.id);
+      expect(p.clips[String(s1.shot_no)].duration).toBeGreaterThan(2.9);
+      expect(p.clips[String(m.shots[1].shot_no)]).toBeDefined();
+
+      // Bấm "gửi" lại (cảnh chưa có clip): hai cảnh đã xong không bị gửi lại.
+      const rest = await jobs.sendToMuse([m.id], { onlyMissing: true });
+      expect(rest.count).toBe(new Set(m.shots.slice(2).map((s) => muse.museText(s, { avoid: true }))).size);
+      expect(gw.store.list().filter((t) => t.prompt === muse.museText(s1, { avoid: true }))).toHaveLength(1);
+    } finally {
+      await gw.close();
+      setSettings();
+    }
   }, 60000);
 });

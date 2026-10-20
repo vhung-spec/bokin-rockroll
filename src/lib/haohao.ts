@@ -1,9 +1,10 @@
 // Đọc dữ liệu của tool HaoHao (bản cho khách, không có API) — CHỈ ĐỌC, không bao giờ ghi vào thư mục của HaoHao. Chỉ dùng phía server.
 // HaoHao lưu hàng đợi task trong <thư mục dữ liệu>/tasks.json (ghi file tạm rồi đổi tên nên không bao giờ đọc phải file dở).
 
-import { promises as fs } from "node:fs";
+import { createReadStream, existsSync, promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { parseHaoHaoTasks, type MuseSource, type MuseTask } from "./muse";
 
 /** Thư mục dữ liệu mặc định của HaoHao (Electron userData). */
@@ -40,8 +41,17 @@ export async function readHaoHaoTasks(dir: string): Promise<MuseTask[]> {
   return tasks;
 }
 
+/** HaoHao lưu đường dẫn đầy đủ của video trong tasks.json → đọc thẳng file đó (cùng máy). */
 export function haohaoSource(dir: string): MuseSource {
-  return { tasks: () => readHaoHaoTasks(dir) };
+  return {
+    tasks: () => readHaoHaoTasks(dir),
+    hasFile: (file) => existsSync(file),
+    async open(task, index) {
+      const file = task.files[index];
+      if (!file || !existsSync(file)) return null;
+      return { name: path.basename(file), body: Readable.toWeb(createReadStream(file)) as ReadableStream<Uint8Array> };
+    },
+  };
 }
 
 export interface HaoHaoInfo {

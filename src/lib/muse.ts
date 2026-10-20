@@ -25,9 +25,13 @@ export interface MuseTask {
   created_at: number;
 }
 
-/** Nguồn task của công cụ tạo video (xem MuseTask). */
+/** Nguồn task của công cụ tạo video: Cổng Muse (museGateway.ts) hoặc HaoHao dán tay (haohao.ts). */
 export interface MuseSource {
   tasks(): Promise<MuseTask[]>;
+  /** File kết quả còn dùng được không (để nhận lại video có sẵn thay vì tạo lại). */
+  hasFile(file: string): boolean;
+  /** Mở file kết quả thứ `index` của task; null nếu không còn. */
+  open(task: MuseTask, index: number): Promise<{ name: string; body: ReadableStream<Uint8Array> } | null>;
 }
 
 /**
@@ -43,6 +47,8 @@ export interface MuseShotJob {
   sent_at: string;
   status: MuseShotStatus;
   task_id?: string;
+  /** Đã gửi thẳng qua Cổng Muse → theo đúng task_id (không cần so nội dung). */
+  submitted?: boolean;
   step?: string;
   message?: string;
   /** Clip của cảnh lúc gửi (được thay bằng clip Muse); null = cảnh chưa có clip. */
@@ -70,7 +76,7 @@ export interface MuseState {
 
 export const MUSE_STATUS_LABEL: Record<MuseShotStatus, string> = {
   waiting: "Chờ dán vào HaoHao",
-  queued: "HaoHao đã nhận",
+  queued: "Đang chờ tới lượt",
   running: "Muse đang làm",
   done: "Đã vào MV",
   error: "Lỗi",
@@ -131,7 +137,8 @@ export function parseHaoHaoTasks(raw: unknown): MuseTask[] {
  * Ưu tiên task đã xong (mới nhất), rồi task đang chờ / đang làm, cuối cùng mới tới task lỗi / huỷ.
  * (Dán hai lần thì lấy cái xong trước; "Thử lại" trong HaoHao giữ nguyên id task nên vẫn theo được.)
  */
-export function pickTask(job: Pick<MuseShotJob, "text" | "sent_at">, tasks: MuseTask[]): MuseTask | undefined {
+export function pickTask(job: Pick<MuseShotJob, "text" | "sent_at" | "task_id" | "submitted">, tasks: MuseTask[]): MuseTask | undefined {
+  if (job.submitted) return tasks.find((t) => t.id === job.task_id);
   const key = matchKey(job.text);
   const since = Date.parse(job.sent_at);
   const mine = tasks.filter((t) => t.created_at >= since && matchKey(t.prompt) === key).sort((a, b) => b.created_at - a.created_at);
@@ -160,8 +167,9 @@ const RATIO_NOTE = (ratio: string) => (ratio && ratio !== "16:9" ? `HaoHao đang
 export function advanceJob(job: MuseShotJob, task: MuseTask | undefined): { job: MuseShotJob; importNow?: MuseTask } {
   if (isFinal(job.status)) return { job };
   if (!task) {
-    // Task đã từng thấy nay biến mất (bị xoá bên HaoHao) → quay về chờ.
+    // Task đã từng thấy nay biến mất (bị xoá bên công cụ tạo video) → quay về chờ / báo lỗi.
     const lost = job.task_id && job.status !== "waiting";
+    if (job.submitted) return { job: { ...job, status: "error", step: undefined, message: "Không còn thấy task này bên Cổng Muse — gửi lại cảnh nếu vẫn cần." } };
     return {
       job: {
         ...job,
@@ -176,7 +184,7 @@ export function advanceJob(job: MuseShotJob, task: MuseTask | undefined): { job:
   const base = { ...job, task_id: task.id, import_error_task: undefined };
   switch (task.status) {
     case "queued":
-      return { job: { ...base, status: "queued", step: task.held ? "Chờ bấm Chạy trong HaoHao" : "Đang xếp hàng", message: RATIO_NOTE(task.ratio) } };
+      return { job: { ...base, status: "queued", step: task.held ? "Chờ bấm Chạy trong HaoHao" : task.step || "Đang xếp hàng", message: RATIO_NOTE(task.ratio) } };
     case "processing":
       return { job: { ...base, status: "running", step: task.step || "Muse đang làm", message: RATIO_NOTE(task.ratio) } };
     case "failed":

@@ -14,7 +14,7 @@ export async function GET() {
   const queue = await readQueue();
   const muse = await readMuse();
   // Thanh menu gọi mỗi lần đổi trang: app vừa mở lại thì dò HaoHao tiếp cho các cảnh đang làm.
-  if (muse.mvs.length) ensureMuseWatch();
+  if (muse.mvs.length) ensureMuseWatch(false);
   return NextResponse.json({
     mode: generationMode(settings),
     engine: settings.engine,

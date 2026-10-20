@@ -96,14 +96,35 @@ if (!existsSync(buildId) || Math.max(...SOURCES.map((f) => newestMtime(path.join
   run(npm, ["run", "build"], "Đang chuẩn bị app (build)…");
 }
 
-// 4. Chạy và mở trình duyệt
+// 4. Mở Cổng Muse (server riêng ở 127.0.0.1:18700, điều khiển Muse qua Chrome) — tắt app là tắt cổng.
+//    Cổng viết bằng TypeScript, Node chạy thẳng (cần Node 22.18 trở lên). NO_MUSE_GATEWAY=1 để không mở.
+let gateway = null;
+const canRunTs = major > 22 || (major === 22 && minor >= 18);
+if (process.env.NO_MUSE_GATEWAY) {
+  // người dùng tắt cổng
+} else if (!canRunTs) {
+  log(`Bỏ qua Cổng Muse: cần Node.js 22.18 trở lên (máy đang có ${process.versions.node}).`);
+} else {
+  gateway = spawn(process.execPath, [path.join(ROOT, "gateway", "server.ts")], { cwd: ROOT, stdio: ["ignore", "inherit", "inherit"] });
+  gateway.on("error", (e) => log(`Không mở được Cổng Muse: ${e.message}`));
+}
+
+// 5. Chạy và mở trình duyệt
 const port = await freePort(Number(process.env.PORT) || 3000);
 const url = `http://${HOST}:${port}`;
 log(`Đang khởi động tại ${url} …`);
 const nextBin = path.join(ROOT, "node_modules", "next", "dist", "bin", "next");
 const server = spawn(process.execPath, [nextBin, "start", "-H", HOST, "-p", String(port)], { cwd: ROOT, stdio: ["ignore", "inherit", "inherit"] });
-server.on("exit", (code) => process.exit(code ?? 0));
-for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => server.kill(sig));
+server.on("exit", (code) => {
+  gateway?.kill();
+  process.exit(code ?? 0);
+});
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, () => {
+    gateway?.kill(sig);
+    server.kill(sig);
+  });
+}
 
 if (await waitFor(`http://${HOST}:${port}/api/status`)) {
   console.log(`\n\x1b[32m✔ Đã sẵn sàng: ${url}\x1b[0m`);

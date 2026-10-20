@@ -9,7 +9,7 @@ import { UserError } from "./errors";
 import { DEFAULT_EDIT_OPTIONS, mergeEditOptions } from "./edit";
 import { FONT_EXTENSIONS, LOGO_EXTENSIONS } from "./branding";
 import { decodeMono, probe, renderWaveform } from "./ffmpeg";
-import { MEDIA_DIR, SAFE_ID, withLock } from "./store";
+import { MEDIA_DIR, SAFE_ID, renameWithRetry, withLock } from "./store";
 import type { AudioTrack, EditOptions, MediaFile, VideoProject } from "./types";
 
 export const VIDEO_EXT = [".mp4", ".mov", ".webm", ".mkv", ".m4v"];
@@ -55,7 +55,7 @@ async function writeProject(p: VideoProject) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify({ ...p, updated_at: new Date().toISOString() }, null, 2) + "\n", "utf8");
-  await fs.rename(tmp, file);
+  await renameWithRetry(tmp, file);
 }
 
 export function updateProject(mvId: string, fn: (p: VideoProject) => VideoProject | Promise<VideoProject>): Promise<VideoProject> {

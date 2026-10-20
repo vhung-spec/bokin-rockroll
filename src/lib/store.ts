@@ -59,6 +59,8 @@ export const DEFAULT_SETTINGS: Settings = {
   channelVoice: "Imagine turning the dial of an old tabletop radio…",
   engine: "auto",
   songStructure: DEFAULT_SONG_STRUCTURE,
+  museMode: "gateway",
+  museGatewayUrl: "http://127.0.0.1:18700",
   museDataDir: "",
   museAutoRender: true,
   museAvoid: true,
@@ -87,11 +89,27 @@ export async function readJson<T>(file: string, fallback: T): Promise<T> {
   }
 }
 
+/**
+ * Đổi tên file tạm thành file thật. Windows đôi khi chặn trong tích tắc (EPERM / EBUSY / EACCES — file vừa ghi đang bị
+ * phần mềm diệt virus / chỉ mục quét) → thử lại vài lần trước khi báo lỗi.
+ */
+export async function renameWithRetry(from: string, to: string) {
+  for (let i = 0; ; i++) {
+    try {
+      return await fs.rename(from, to);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (i >= 10 || !["EPERM", "EBUSY", "EACCES"].includes(code ?? "")) throw err;
+      await new Promise((r) => setTimeout(r, 50 * (i + 1)));
+    }
+  }
+}
+
 export async function writeJson(file: string, data: unknown) {
   await fs.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data, null, 2) + "\n", "utf8");
-  await fs.rename(tmp, file);
+  await renameWithRetry(tmp, file);
 }
 
 // ---------- Thư viện ----------

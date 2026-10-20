@@ -18,6 +18,8 @@ data/drafts/
 data/media/
 data/render_queue.json
 data/muse.json
+# Cổng Muse: hàng đợi, video tải về, profile Chrome (có phiên đăng nhập Muse — không bao giờ commit)
+data/gateway/
 
 # misc
 .DS_Store

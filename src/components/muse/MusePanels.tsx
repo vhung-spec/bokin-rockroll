@@ -1,12 +1,11 @@
 "use client";
 
-// Các khối giao diện "Tạo clip bằng Muse" dùng chung cho trang Clip Muse và trang Ghép video của từng MV.
+// Các khối giao diện "Tạo clip bằng Muse" dùng chung cho trang Clip Muse, trang Ghép video của từng MV và trang Cài đặt.
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CopyButton, ErrorBox, Spinner } from "@/components/ui";
 import { api, copyText } from "@/lib/client";
-import type { HaoHaoInfo } from "@/lib/haohao";
 import { MUSE_STATUS_LABEL, museCounts, pasteText, type MuseMV, type MuseShotStatus } from "@/lib/muse";
 import type { MuseView, SendResult } from "@/lib/museJobs";
 
@@ -19,7 +18,7 @@ const CHIP: Record<MuseShotStatus, string> = {
   kept: "border-ink/30 bg-chrome/40",
 };
 
-/** Tiến độ Muse (?mv=… cho một MV), tự tải lại vài giây một lần khi còn cảnh đang làm. */
+/** Tiến độ Muse (?mv=… cho một MV), tự tải lại vài giây một lần khi còn cảnh đang làm / đang đăng nhập. */
 export function useMuse(mvId?: string) {
   const [view, setView] = useState<MuseView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,53 +27,128 @@ export function useMuse(mvId?: string) {
   useEffect(() => {
     void reload();
   }, [reload]);
-  const open = view?.mvs.some((m) => m.shots.some((s) => s.status !== "done" && s.status !== "kept")) ?? false;
+  const open = (view?.mvs.some((m) => m.shots.some((s) => s.status !== "done" && s.status !== "kept")) ?? false) || Boolean(view?.gateway?.loggingIn);
   useEffect(() => {
     if (!open) return;
     const t = setInterval(() => void reload(), 4000);
     return () => clearInterval(t);
   }, [open, reload]);
-  return { view, setView, error, setError, reload };
+  return { view, setView, error, setError, reload, url };
 }
 
-export function HaoHaoStatus({ view }: { view: MuseView }) {
-  const h: HaoHaoInfo = view.haohao;
-  const onC = h.outputDir && /^c:/i.test(h.outputDir);
+/** Gửi qua Cổng Muse = tốn lượt ngay → hỏi lại. Dán tay vào HaoHao thì chưa tốn gì cho tới lúc dán. */
+export function confirmSend(view: MuseView | null, shots: number, again = false): boolean {
+  if (view?.mode === "gateway") {
+    return confirm(`${again ? "Gửi lại" : "Gửi"} ${shots} cảnh sang Muse ngay bây giờ? Mỗi cảnh dùng một lượt Muse (tính vào hạn mức tuần của tài khoản Meta).`);
+  }
+  if (again) return confirm(`Gửi lại ${shots} cảnh sang Muse? Mỗi cảnh tốn thêm một lượt Muse khi dán vào HaoHao.`);
+  return shots <= 30 || confirm(`Khoảng ${shots} cảnh sẽ được copy để dán vào HaoHao — mỗi cảnh một lượt Muse. Tiếp tục?`);
+}
+
+/** Tình trạng Cổng Muse (đăng nhập, hạn mức, nút Đăng nhập / Kiểm tra) hoặc HaoHao. */
+export function MuseStatus({ view, url, onView }: { view: MuseView; url: string; onView: (v: MuseView) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function act(action: "login" | "check") {
+    setBusy(true);
+    setError(null);
+    try {
+      onView(await api<MuseView>(url, { method: "POST", json: { action } }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const settingsLine = (
+    <p className="text-xs text-muted">
+      Đủ clip + có bài hát → {view.autoRender ? "tự thêm vào hàng chờ dựng và chạy" : "không tự dựng"} · Negative prompt{" "}
+      {view.avoid ? "ghép vào cuối prompt (Avoid: …)" : "không gửi"} ·{" "}
+      <Link href="/settings" className="underline">
+        đổi trong Cài đặt
+      </Link>
+    </p>
+  );
+
+  if (view.mode === "gateway") {
+    const g = view.gateway;
+    if (!g?.reachable) {
+      return (
+        <div className="space-y-1 text-sm">
+          <p className="text-cherry-dark">✗ {g?.error ?? "Chưa kết nối được Cổng Muse."}</p>
+          {settingsLine}
+        </div>
+      );
+    }
+    const q = g.quota;
+    const waiting = (g.counts.queued ?? 0) + (g.counts.processing ?? 0);
+    return (
+      <div className="space-y-1 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="badge border-mint-dark/50 bg-mint/30">✓ Cổng Muse đang chạy</span>
+          {g.loggingIn ? (
+            <span className="badge border-sky-400 bg-sky-100 text-sky-900">Đang chờ bạn đăng nhập trong cửa sổ Chrome của cổng…</span>
+          ) : g.loggedIn ? (
+            <span className="badge border-mint-dark/50 bg-mint/30">Đã đăng nhập Muse</span>
+          ) : g.loggedIn === false ? (
+            <span className="badge border-cherry bg-cherry/10 text-cherry-dark">Chưa đăng nhập Muse</span>
+          ) : (
+            <span className="badge border-ink/30 bg-cream">Chưa kiểm tra đăng nhập</span>
+          )}
+          {q && (
+            <span className="text-xs text-muted">
+              {q.tier && `${q.tier} · `}đã dùng {q.pct}% hạn mức tuần{q.resetsAt ? ` · đặt lại ${new Date(q.resetsAt).toLocaleDateString("vi-VN")}` : ""}
+            </span>
+          )}
+          {waiting > 0 && <span className="text-xs text-muted">· hàng đợi của cổng: {waiting}</span>}
+          <span className="ml-auto flex gap-2">
+            <button className="btn-ghost btn-sm" disabled={busy} onClick={() => void act("login")} title="Mở cửa sổ Chrome của cổng để đăng nhập Muse">
+              Đăng nhập Muse
+            </button>
+            <button className="btn-ghost btn-sm" disabled={busy} onClick={() => void act("check")} title="Kiểm tra lại đăng nhập và hạn mức">
+              {busy && <Spinner />} Kiểm tra
+            </button>
+          </span>
+        </div>
+        {g.paused && <p className="text-xs font-semibold text-amber-800">⏸ {g.paused}</p>}
+        <ErrorBox error={error} />
+        {view.error && <p className="text-xs text-cherry-dark">Lần dò gần nhất: {view.error}</p>}
+        {settingsLine}
+      </div>
+    );
+  }
+
+  const h = view.haohao;
+  const onC = h?.outputDir && /^c:/i.test(h.outputDir);
   return (
     <div className="space-y-1 text-sm">
-      {h.found && !h.error ? (
+      {h?.found && !h.error ? (
         <p>
           <span className="badge border-mint-dark/50 bg-mint/30">✓ Đã thấy HaoHao</span> <span className="text-muted">{h.dir}</span> · {h.tasks} task video
         </p>
       ) : (
         <p className="text-cherry-dark">
-          ✗ {h.error ?? "Chưa thấy HaoHao."} Cài và mở HaoHao một lần, hoặc chỉnh đường dẫn ở{" "}
+          ✗ {h?.error ?? "Chưa thấy HaoHao."} Cài và mở HaoHao một lần, hoặc chỉnh đường dẫn ở{" "}
           <Link href="/settings" className="underline">
             Cài đặt
           </Link>
           .
         </p>
       )}
-      {h.outputDir && (
+      {h?.outputDir && (
         <p className="text-xs text-muted">
           HaoHao lưu video ở: {h.outputDir}
           {h.outputIsDefault && " (mặc định)"}
           {onC && <span className="text-amber-800"> — ổ C gần đầy: nên đổi “Thư mục lưu” trong Cài đặt của HaoHao sang ổ D.</span>}
         </p>
       )}
-      {view.error && h.found && <p className="text-xs text-cherry-dark">Lần dò gần nhất: {view.error}</p>}
-      <p className="text-xs text-muted">
-        Đủ clip + có bài hát → {view.autoRender ? "tự thêm vào hàng chờ dựng và chạy" : "không tự dựng"} · Negative prompt{" "}
-        {view.avoid ? "ghép vào cuối prompt (Avoid: …)" : "không gửi"} ·{" "}
-        <Link href="/settings" className="underline">
-          đổi trong Cài đặt
-        </Link>
-      </p>
+      {view.error && h?.found && <p className="text-xs text-cherry-dark">Lần dò gần nhất: {view.error}</p>}
+      {settingsLine}
     </div>
   );
 }
 
-/** Sau khi bấm "Tạo clip bằng Muse": chữ đã copy + các bước dán vào HaoHao. */
+/** Sau khi bấm gửi: Cổng Muse = báo đã gửi; HaoHao = chữ đã copy + các bước dán. */
 export function PasteBox({ result, onClose }: { result: SendResult; onClose: () => void }) {
   const [copied, setCopied] = useState<boolean | null>(null);
   const once = useRef(false);
@@ -92,21 +166,26 @@ export function PasteBox({ result, onClose }: { result: SendResult; onClose: () 
     URL.revokeObjectURL(a.href);
   }
 
+  const headline = result.sent
+    ? result.count
+      ? `Đã gửi ${result.count} cảnh sang Muse qua Cổng Muse (${result.count} lượt). Theo dõi tiến độ bên dưới.`
+      : "Không gửi cảnh nào mới."
+    : result.count
+      ? `${result.count} prompt cần dán vào HaoHao (${result.count} lượt Muse)`
+      : "Không cần dán gì — mọi cảnh đã có sẵn video bên HaoHao.";
+
   return (
     <div className="rounded-lg border-2 border-mint-dark/60 bg-mint/15 p-3 text-sm" data-testid="muse-paste">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <b>
-          {result.count
-            ? `${result.count} prompt cần dán vào HaoHao (${result.count} lượt Muse)`
-            : "Không cần dán gì — mọi cảnh đã có sẵn video bên HaoHao."}
-        </b>
+        <b>{headline}</b>
         {result.reused > 0 && <span className="badge border-mint-dark/50 bg-mint/30">{result.reused} cảnh nhận luôn video có sẵn, không tốn lượt</span>}
+        {result.failed > 0 && <span className="badge border-cherry bg-cherry/10 text-cherry-dark">{result.failed} cảnh gửi lỗi</span>}
         <button className="btn-ghost btn-sm ml-auto" onClick={onClose}>
           Đóng
         </button>
       </div>
       <ErrorBox error={result.warning ?? null} />
-      {result.count > 0 && (
+      {!result.sent && result.count > 0 && (
         <>
           <ol className="mb-2 list-decimal space-y-0.5 pl-5">
             <li>{copied ? "✓ Đã copy sẵn các prompt." : "Bấm Copy bên dưới."}</li>
@@ -134,17 +213,21 @@ export function MuseShots({
   mv,
   busy,
   onResend,
+  onReimport,
   onForget,
   showTitle,
 }: {
   mv: MuseMV;
   busy?: boolean;
   onResend: (shots: number[]) => void;
+  /** Nhận lại clip của cảnh Muse đã làm xong mà đưa vào MV bị lỗi (không tốn lượt). */
+  onReimport: (shots: number[]) => void;
   onForget: () => void;
   showTitle?: boolean;
 }) {
   const c = museCounts(mv);
-  const errors = mv.shots.filter((s) => s.status === "error").map((s) => s.shot_no);
+  const reimport = mv.shots.filter((s) => s.status === "error" && s.import_error_task).map((s) => s.shot_no);
+  const errors = mv.shots.filter((s) => s.status === "error" && !s.import_error_task).map((s) => s.shot_no);
   const waitingText = pasteText([...new Set(mv.shots.filter((s) => s.status === "waiting").map((s) => s.text))]);
   const pct = c.total ? Math.round((c.done / c.total) * 100) : 0;
   return (
@@ -163,12 +246,17 @@ export function MuseShots({
         </span>
         <div className="ml-auto flex flex-wrap gap-2">
           {waitingText && <CopyButton text={waitingText} label={`📋 Copy lại ${c.waiting} prompt chờ dán`} />}
+          {reimport.length > 0 && (
+            <button className="btn-ghost btn-sm" disabled={busy} onClick={() => onReimport(reimport)} title="Muse đã làm xong — chỉ lấy lại file và đưa vào MV, không gửi lại.">
+              ↻ Nhận lại {reimport.length} clip (không tốn lượt)
+            </button>
+          )}
           {errors.length > 0 && (
-            <button className="btn-ghost btn-sm" disabled={busy} onClick={() => onResend(errors)} title="Tạo lại các cảnh lỗi (tốn thêm lượt Muse). Hoặc bấm Thử lại ngay trong HaoHao.">
+            <button className="btn-ghost btn-sm" disabled={busy} onClick={() => onResend(errors)} title="Tạo lại các cảnh lỗi (tốn thêm lượt Muse).">
               ↻ Gửi lại {errors.length} cảnh lỗi
             </button>
           )}
-          <button className="btn-ghost btn-sm" disabled={busy} onClick={onForget} title="Thôi theo dõi (không xoá clip đã có, không đụng tới HaoHao)">
+          <button className="btn-ghost btn-sm" disabled={busy} onClick={onForget} title="Thôi theo dõi (không xoá clip đã có, không huỷ việc bên cổng / HaoHao)">
             Bỏ theo dõi
           </button>
         </div>
@@ -206,8 +294,7 @@ export function MuseShots({
 
 /** Thẻ "Tạo clip bằng Muse" trên trang Ghép video của một MV. `onClips` = có clip mới vào MV (tải lại danh sách clip). */
 export function MuseCard({ mvId, missing, onClips }: { mvId: string; missing: number; onClips: () => void }) {
-  const { view, setView, error, setError } = useMuse(mvId);
-  const url = `/api/muse?mv=${encodeURIComponent(mvId)}`;
+  const { view, setView, error, setError, url } = useMuse(mvId);
   const [result, setResult] = useState<SendResult | null>(null);
   const [busy, setBusy] = useState(false);
   const mv = view?.mvs[0];
@@ -221,7 +308,7 @@ export function MuseCard({ mvId, missing, onClips }: { mvId: string; missing: nu
   }, [done, onClips]);
 
   async function send(shots?: number[]) {
-    if (shots && !confirm(`Gửi lại ${shots.length} cảnh sang Muse? Mỗi cảnh tốn thêm một lượt Muse.`)) return;
+    if (!confirmSend(view, shots?.length ?? todo, Boolean(shots))) return;
     setBusy(true);
     setError(null);
     try {
@@ -235,10 +322,10 @@ export function MuseCard({ mvId, missing, onClips }: { mvId: string; missing: nu
     }
   }
 
-  async function forget() {
+  async function post(json: unknown) {
     setBusy(true);
     try {
-      setView(await api<MuseView>(url, { method: "POST", json: { action: "forget", id: mvId } }));
+      setView(await api<MuseView>(url, { method: "POST", json }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -246,13 +333,14 @@ export function MuseCard({ mvId, missing, onClips }: { mvId: string; missing: nu
     }
   }
 
+  const gateway = view?.mode === "gateway";
   return (
     <Card
       title="Tạo clip bằng Muse"
       actions={
         <>
           <button className="btn-primary btn-sm" disabled={busy || !todo} onClick={() => void send()} title={todo ? "" : "Mọi cảnh đã có clip hoặc đang được Muse làm"}>
-            {busy && <Spinner />} 🎬 Tạo {todo} cảnh chưa có clip
+            {busy && <Spinner />} 🎬 {gateway ? `Gửi ${todo} cảnh chưa có clip sang Muse` : `Tạo ${todo} cảnh chưa có clip`}
           </button>
           <Link href="/muse" className="btn-ghost btn-sm">
             Nhiều MV một lượt
@@ -267,13 +355,21 @@ export function MuseCard({ mvId, missing, onClips }: { mvId: string; missing: nu
         </p>
       ) : (
         <div className="space-y-3">
-          <HaoHaoStatus view={view} />
+          <MuseStatus view={view} url={url} onView={setView} />
           {result && <PasteBox result={result} onClose={() => setResult(null)} />}
           {mv ? (
-            <MuseShots mv={mv} busy={busy} onResend={(s) => void send(s)} onForget={() => void forget()} />
+            <MuseShots
+              mv={mv}
+              busy={busy}
+              onResend={(s) => void send(s)}
+              onReimport={(s) => void post({ action: "reimport", id: mvId, shots: s })}
+              onForget={() => void post({ action: "forget", id: mvId })}
+            />
           ) : (
             <p className="text-sm text-muted">
-              Muse (Meta) làm clip qua tool HaoHao: app copy sẵn prompt của các cảnh, bạn dán vào HaoHao một lần; clip nào xong tự vào đúng cảnh.
+              {gateway
+                ? "Muse (Meta) làm clip qua Cổng Muse: app gửi từng cảnh (kèm ảnh nhân vật nếu có), clip nào xong tự vào đúng cảnh."
+                : "Muse (Meta) làm clip qua tool HaoHao: app copy sẵn prompt của các cảnh, bạn dán vào HaoHao một lần; clip nào xong tự vào đúng cảnh."}
             </p>
           )}
         </div>
