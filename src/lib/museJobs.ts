@@ -21,7 +21,7 @@ import {
   type MuseState,
   type MuseTask,
 } from "./muse";
-import { gatewaySource, gatewayStatus, gatewaySubmit, type GatewayStatus } from "./museGateway";
+import { gatewayRecheck, gatewaySource, gatewayStatus, gatewaySubmit, type GatewayStatus } from "./museGateway";
 import { addToQueue, startQueue } from "./queue";
 import { isRendering } from "./render";
 import { MUSE_FILE, UPLOAD_DIR, loadMV, readJson, readSettings, withLock, writeJson } from "./store";
@@ -69,11 +69,11 @@ const otherMode = (job: MuseShotJob, gateway: boolean) => Boolean(job.submitted)
 async function shotImages(mv: MVResult, shot: Shot): Promise<string[]> {
   const ids = new Set(shot.characters_in_shot ?? []);
   const files = mv.character_bible.characters.filter((c) => ids.has(c.id)).flatMap((c) => c.reference_images ?? []);
-  const root = path.resolve(UPLOAD_DIR());
+  const root = path.resolve(/*turbopackIgnore: true*/ UPLOAD_DIR());
   const out: string[] = [];
   let total = 0;
   for (const rel of files) {
-    const abs = path.resolve(root, path.relative(path.join("data", "uploads"), rel));
+    const abs = path.resolve(/*turbopackIgnore: true*/ root, path.relative(path.join("data", "uploads"), rel));
     if (!abs.startsWith(root + path.sep)) continue;
     const buf = await fs.readFile(abs).catch(() => null);
     if (!buf || total + buf.length > MAX_REF_BYTES) continue;
@@ -258,6 +258,37 @@ async function importClip(src: MuseSource, mvId: string, job: MuseShotJob, task:
     if (["EPERM", "EBUSY", "EACCES"].includes((err as NodeJS.ErrnoException).code ?? "")) return { status: "running", step: "File đang bận — sẽ thử đưa clip vào lại" };
     return fail(`Không đưa được clip vào MV: ${(err as Error).message}`);
   }
+}
+
+/**
+ * Kiểm tra lại các cảnh gửi qua Cổng Muse bị báo lỗi: cổng đọc lại đúng phiên chat cũ, Muse đã làm xong thì tải video về
+ * (không gửi lại — không tốn lượt). Trả về số cảnh đã yêu cầu kiểm tra lại.
+ */
+export async function recheckMuse(mvId: string, shots?: number[]): Promise<number> {
+  const settings = await readSettings();
+  if (settings.museMode !== "gateway") throw new UserError("Chỉ kiểm tra lại được khi gửi qua Cổng Muse.");
+  const state = await readMuse();
+  const jobs = (state.mvs.find((m) => m.mv_id === mvId)?.shots ?? []).filter(
+    (j) => j.status === "error" && j.submitted && j.task_id && !j.import_error_task && (!shots || shots.includes(j.shot_no)),
+  );
+  const ok = new Map<number, string>();
+  const errors: string[] = [];
+  for (const id of new Set(jobs.map((j) => j.task_id!))) {
+    try {
+      await gatewayRecheck(settings.museGatewayUrl, id);
+      for (const j of jobs.filter((x) => x.task_id === id)) ok.set(j.shot_no, id);
+    } catch (err) {
+      errors.push((err as Error).message);
+    }
+  }
+  await updateMuse((st) => {
+    for (const job of st.mvs.find((m) => m.mv_id === mvId)?.shots ?? []) {
+      if (ok.get(job.shot_no) === job.task_id && job.status === "error") Object.assign(job, { status: "running", step: "Kiểm tra lại kết quả", message: undefined });
+    }
+  });
+  if (ok.size) ensureMuseWatch();
+  if (!ok.size && errors.length) throw new UserError(errors[0]);
+  return ok.size;
 }
 
 /** Nhận lại clip cho các cảnh mà Muse đã làm xong nhưng đưa vào MV bị lỗi (lấy lại file, không gửi lại — không tốn lượt). */

@@ -214,6 +214,7 @@ export function MuseShots({
   busy,
   onResend,
   onReimport,
+  onRecheck,
   onForget,
   showTitle,
 }: {
@@ -222,11 +223,14 @@ export function MuseShots({
   onResend: (shots: number[]) => void;
   /** Nhận lại clip của cảnh Muse đã làm xong mà đưa vào MV bị lỗi (không tốn lượt). */
   onReimport: (shots: number[]) => void;
+  /** Cổng Muse đọc lại phiên chat cũ của cảnh lỗi (không gửi lại, không tốn lượt). */
+  onRecheck: (shots: number[]) => void;
   onForget: () => void;
   showTitle?: boolean;
 }) {
   const c = museCounts(mv);
   const reimport = mv.shots.filter((s) => s.status === "error" && s.import_error_task).map((s) => s.shot_no);
+  const recheck = mv.shots.filter((s) => s.status === "error" && s.submitted && s.task_id && !s.import_error_task).map((s) => s.shot_no);
   const errors = mv.shots.filter((s) => s.status === "error" && !s.import_error_task).map((s) => s.shot_no);
   const waitingText = pasteText([...new Set(mv.shots.filter((s) => s.status === "waiting").map((s) => s.text))]);
   const pct = c.total ? Math.round((c.done / c.total) * 100) : 0;
@@ -246,6 +250,16 @@ export function MuseShots({
         </span>
         <div className="ml-auto flex flex-wrap gap-2">
           {waitingText && <CopyButton text={waitingText} label={`📋 Copy lại ${c.waiting} prompt chờ dán`} />}
+          {recheck.length > 0 && (
+            <button
+              className="btn-ghost btn-sm"
+              disabled={busy}
+              onClick={() => onRecheck(recheck)}
+              title="Đọc lại cuộc chat cũ trên Muse: nếu Muse đã làm xong video thì tải về. Không gửi lại."
+            >
+              ↻ Kiểm tra lại {recheck.length} cảnh (không tốn lượt)
+            </button>
+          )}
           {reimport.length > 0 && (
             <button className="btn-ghost btn-sm" disabled={busy} onClick={() => onReimport(reimport)} title="Muse đã làm xong — chỉ lấy lại file và đưa vào MV, không gửi lại.">
               ↻ Nhận lại {reimport.length} clip (không tốn lượt)
@@ -363,6 +377,7 @@ export function MuseCard({ mvId, missing, onClips }: { mvId: string; missing: nu
               busy={busy}
               onResend={(s) => void send(s)}
               onReimport={(s) => void post({ action: "reimport", id: mvId, shots: s })}
+              onRecheck={(s) => void post({ action: "recheck", id: mvId, shots: s })}
               onForget={() => void post({ action: "forget", id: mvId })}
             />
           ) : (

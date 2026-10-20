@@ -82,6 +82,11 @@ export async function gatewaySubmit(url: string, input: GatewaySubmit): Promise<
   return r.task.id;
 }
 
+/** Đọc lại phiên chat cũ của task lỗi, tải video nếu Muse đã làm xong — không gửi lại, không tốn lượt. */
+export function gatewayRecheck(url: string, taskId: string): Promise<unknown> {
+  return call(url, "POST", `/tasks/${encodeURIComponent(taskId)}/recheck`, {});
+}
+
 interface PublicTask {
   id: string;
   prompt: string;

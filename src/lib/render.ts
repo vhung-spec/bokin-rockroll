@@ -178,7 +178,7 @@ async function prepareLook(mv: MVResult, project: VideoProject, plan: EditPlan, 
 export async function measureLoudness(file: string, work: string, name: string, run: RunOptions = {}): Promise<LoudnessStats> {
   const frames = `${name}_ebur128_frames.txt`;
   const res = await ffmpegOrThrow(
-    ["-hide_banner", "-nostdin", "-v", "info", "-i", path.resolve(file), "-map", "0:a:0", "-vn", "-sn", "-dn", "-af", `${EBUR128_FILTER},ametadata=mode=print:file=${frames}`, "-f", "null", "-"],
+    ["-hide_banner", "-nostdin", "-v", "info", "-i", path.resolve(/*turbopackIgnore: true*/ file), "-map", "0:a:0", "-vn", "-sn", "-dn", "-af", `${EBUR128_FILTER},ametadata=mode=print:file=${frames}`, "-f", "null", "-"],
     "Đo âm lượng",
     { ...run, cwd: work },
   );

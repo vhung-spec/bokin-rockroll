@@ -181,21 +181,23 @@ Cả hai cách đều: tiến độ từng cảnh trên app, MV đủ clip + có
 ### Cổng Muse là gì
 
 Một chương trình nhỏ chạy riêng trên máy (`gateway/`, địa chỉ `http://127.0.0.1:18700`). Nó mở **Google Chrome với profile riêng** (thư mục
-`data/gateway/chrome-profile`), gửi prompt vào Muse như người gõ (“Tạo video · tỷ lệ 16:9 ngang” + prompt), chờ Muse làm xong rồi tải video về `data/gateway/videos/`.
+`chrome-profile` trong thư mục dữ liệu cổng, vd. `D:\bokin-rockroll-muse-gateway`), gửi prompt vào Muse như người gõ (“Tạo video · tỷ lệ 16:9 ngang” + prompt), chờ Muse làm xong rồi tải video về thư mục `videos/` trong đó.
 
 - **Bấm đúp `Chay-MV-Prompt-Studio`** là mở cả app lẫn cổng; đóng cửa sổ đen là tắt cả hai (Chrome của cổng cũng tự tắt). Chạy riêng cổng: `npm run gateway`.
-- **Làm lần lượt từng cảnh** trên một tài khoản Muse, nghỉ khoảng 15 giây giữa hai lần gửi (không gửi dồn). Một cảnh 10 giây mất khoảng 1,5–3 phút.
+- **Làm lần lượt từng cảnh** trên một tài khoản Muse, nghỉ khoảng 15 giây giữa hai lần gửi (không gửi dồn). Một cảnh mất khoảng 1–2 phút.
+  Thử thật 20/10/2026 (2 cảnh): Muse ra clip **10 giây, 1280×720, 24 hình/giây, H.264, có tiếng** (AAC mono — MV tắt tiếng clip), đúng nội dung prompt.
 - **Không tự gửi lại** khi Muse đã nhận lệnh: mất mạng lúc chờ thì cổng dò lại đúng phiên đó (không tốn thêm lượt). Muse không ra video → cảnh báo lỗi kèm
   lời Muse trả lời; bấm **↻ Gửi lại** nếu muốn thử lại (tốn thêm lượt).
 - **Hết hạn mức tuần** của Muse → cổng tạm dừng, báo ngày đặt lại, tới ngày tự chạy tiếp.
 - **Không có API key**: cổng chỉ nghe trên máy này (`127.0.0.1`), chỉ nhận yêu cầu gửi tới đúng `127.0.0.1:18700` / `localhost:18700`, và **từ chối mọi yêu cầu
   đến từ trang web** (có `Origin` / `Sec-Fetch-Site`) hay POST không phải JSON — trang web lạ mở trong trình duyệt không gọi được cổng.
-- Dữ liệu cổng (`data/gateway/`, có phiên đăng nhập Muse) **không bao giờ được commit**.
+- Dữ liệu cổng (có phiên đăng nhập Muse) nằm **ngoài thư mục app** (thư mục kế bên, cùng ổ đĩa; đổi được bằng biến `MUSE_GATEWAY_DIR`): lúc build Next.js đọc file trong thư mục app và sẽ vấp vào profile Chrome đang mở. Không bao giờ được commit.
 - Lưu ý: cổng điều khiển trang web Muse giống người dùng; Meta đổi trang thì có thể phải sửa cổng. Tự động hoá có thể trái điều khoản của Meta — cổng chỉ dùng
   **một tài khoản**, không proxy, không xoay vòng tài khoản.
 
 API của cổng (cho app khác trên máy): `GET /status` · `POST /login` · `POST /check` · `GET /tasks` · `POST /tasks {prompt, ratio?, kind?, label?, images?: [data URL]}` ·
-`GET /tasks/:id` · `POST /tasks/:id/cancel | /retry` · `GET /tasks/:id/file?i=0` (xem đầu file `gateway/server.ts`).
+`GET /tasks/:id` · `POST /tasks/:id/cancel | /retry | /recheck` · `GET /tasks/:id/file?i=0` · `GET /tasks/:id/history` (chẩn đoán) — xem đầu file `gateway/server.ts`.
+Hạn mức tuần: cổng đọc % hạn mức từ trang Muse; lần thử thật chưa đọc được (thẻ không hiện %), nên khi hết hạn mức cảnh sẽ báo lỗi thay vì tự tạm dừng.
 
 ### Chuẩn bị (một lần)
 
@@ -222,8 +224,11 @@ Chi tiết:
 - **Clip bạn tự thêm** vào một cảnh sau khi gửi thì được giữ nguyên, app không đè bằng clip Muse.
 - **Muse làm xong mà đưa clip vào MV bị lỗi**: bấm **↻ Nhận lại N clip (không tốn lượt)** — app chỉ lấy lại file, không gửi lại cho Muse.
   Lỗi “file đang bận” thoáng qua trên Windows thì app tự thử lại.
+- **Cảnh báo lỗi mà có thể Muse đã làm xong** (vd. Muse trả lời “Muốn mình làm thêm bản biến tấu khác…”): bấm **↻ Kiểm tra lại N cảnh (không tốn lượt)** —
+  cổng đọc lại đúng cuộc chat cũ và tải video nếu có, không gửi lại. Cổng cũng tự tìm video Muse ghi trong câu trả lời khi không có “thẻ video” riêng
+  (gặp khi thử thật). Chỉ khi kiểm tra lại vẫn lỗi mới cần **↻ Gửi lại** (tốn thêm lượt).
 - Đổi cách gửi giữa chừng: cảnh gửi bằng cách cũ được giữ nguyên kèm lời nhắc; cảnh còn chờ dán vào HaoHao thì gửi lại qua Cổng Muse được.
-- Video gốc vẫn nằm trong `data/gateway/videos/` (hoặc thư mục lưu của HaoHao); app chép một bản vào `data/media/<mã MV>/`.
+- Video gốc vẫn nằm trong thư mục `videos/` của cổng (hoặc thư mục lưu của HaoHao); app chép một bản vào `data/media/<mã MV>/`.
 
 ### Cách dán tay vào HaoHao (dự phòng)
 
@@ -337,7 +342,7 @@ gateway/                Cổng Muse — server riêng 127.0.0.1:18700 (Node ch�
   runner.ts             gửi lệnh / dò / tải file, Worker chạy lần lượt trên một tài khoản (đăng nhập, hạn mức, không gửi lại khi lỗi mạng)
   musePage.ts           script chạy trong trang muse.ai + lớp gọi nó qua Chrome
   chrome.ts             mở Chrome với profile riêng, điều khiển qua CDP bằng pipe
-  tasks.ts              hàng đợi task (data/gateway/tasks.json)
+  tasks.ts              hàng đợi task (tasks.json trong thư mục dữ liệu cổng)
 scripts/start.mjs       khởi động một lệnh (dùng bởi Chay-MV-Prompt-Studio.bat / .command): mở Cổng Muse + app
 tests/                  vitest (fakeMuse.ts = "Muse giả" cho test cổng)
 ```

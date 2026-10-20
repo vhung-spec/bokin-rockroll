@@ -49,8 +49,8 @@ export async function DELETE(req: Request) {
     const character = mv.character_bible.characters.find((c) => c.id === characterId);
     if (!character) return NextResponse.json({ error: "Không có nhân vật này." }, { status: 400 });
     const remaining = (character.reference_images ?? []).filter((p) => p !== file);
-    const abs = path.resolve(UPLOAD_DIR(), path.relative(path.join("data", "uploads"), file));
-    if (abs.startsWith(path.resolve(UPLOAD_DIR()) + path.sep)) await fs.rm(abs, { force: true });
+    const abs = path.resolve(/*turbopackIgnore: true*/ UPLOAD_DIR(), path.relative(path.join("data", "uploads"), file));
+    if (abs.startsWith(path.resolve(/*turbopackIgnore: true*/ UPLOAD_DIR()) + path.sep)) await fs.rm(abs, { force: true });
     return NextResponse.json(await setReferenceImages(mvId, characterId, remaining));
   } catch (err) {
     return errorResponse(err);

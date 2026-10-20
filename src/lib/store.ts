@@ -20,7 +20,10 @@ import type {
   VideoModelLibrary,
 } from "./types";
 
-export const DATA_DIR = process.env.MV_DATA_DIR ? path.resolve(process.env.MV_DATA_DIR) : path.join(process.cwd(), "data");
+// turbopackIgnore: không để lúc build Turbopack đưa cả thư mục dự án (video trong data/media, profile Chrome của Cổng Muse…) vào trace.
+export const DATA_DIR = process.env.MV_DATA_DIR
+  ? path.resolve(/*turbopackIgnore: true*/ process.env.MV_DATA_DIR)
+  : path.join(/*turbopackIgnore: true*/ process.cwd(), "data");
 /** Đường dẫn trong thư mục data (đánh dấu để Turbopack không trace cả dự án). */
 const dataPath = (...parts: string[]) => path.join(/*turbopackIgnore: true*/ DATA_DIR, ...parts);
 const HISTORY_DIR = () => dataPath("history");

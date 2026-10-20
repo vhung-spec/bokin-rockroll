@@ -10,10 +10,11 @@
 //   GET  /tasks?status=&limit=      danh sách task (mới nhất trước)
 //   POST /tasks                     { prompt, kind?: "video"|"image", ratio?: "16:9"…, label?, images?: [data URL], timeoutMin? }
 //   GET  /tasks/:id                 một task
-//   POST /tasks/:id/cancel | /retry
+//   POST /tasks/:id/cancel | /retry (gửi lại = tốn lượt) | /recheck (đọc lại phiên cũ, không gửi lại)
 //   GET  /tasks/:id/file?i=0        tải file kết quả thứ i
+//   GET  /tasks/:id/history         chẩn đoán: tóm tắt cuộc chat Muse của task (chỉ đọc)
 
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, renameSync, statSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -149,7 +150,7 @@ export async function createGateway(opts: GatewayOptions): Promise<Gateway> {
           return send(201, { task: publicTask(task) });
         }
       }
-      const m = /^\/tasks\/(task_[0-9a-f]+)(\/cancel|\/retry|\/file)?$/.exec(p);
+      const m = /^\/tasks\/(task_[0-9a-f]+)(\/cancel|\/retry|\/recheck|\/file|\/history)?$/.exec(p);
       if (m) {
         const [, id, action = ""] = m;
         const task = store.get(id);
@@ -157,6 +158,11 @@ export async function createGateway(opts: GatewayOptions): Promise<Gateway> {
         if (req.method === "GET" && !action) return send(200, { task: publicTask(task) });
         if (req.method === "POST" && action === "/cancel") return send(200, { task: publicTask(worker.cancel(id) ?? task) });
         if (req.method === "POST" && action === "/retry") return send(200, { task: publicTask(worker.retry(id) ?? task) });
+        if (req.method === "POST" && action === "/recheck") return send(200, { task: publicTask(worker.recheck(id) ?? task) });
+        if (req.method === "GET" && action === "/history") {
+          if (!task.sessionId || !page.history) return send(404, { error: "Task chưa có phiên chat Muse." });
+          return send(200, { history: await page.history(task.sessionId) });
+        }
         if (req.method === "GET" && action === "/file") {
           const file = task.files[Number(url.searchParams.get("i")) || 0];
           if (!file || !existsSync(file)) return send(404, { error: "Task chưa có file này." });
@@ -201,7 +207,14 @@ export async function createGateway(opts: GatewayOptions): Promise<Gateway> {
 // ---------- Chạy trực tiếp: node gateway/server.ts ----------
 
 if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
-  const dir = process.env.MUSE_GATEWAY_DIR ? path.resolve(process.env.MUSE_GATEWAY_DIR) : path.join(ROOT, "data", "gateway");
+  // Dữ liệu cổng nằm NGOÀI thư mục dự án (thư mục kế bên, cùng ổ đĩa): lúc build, Next.js đọc file trong thư mục dự án và sẽ vấp
+  // vào profile Chrome đang mở (có phiên đăng nhập Muse, file bị Chrome khoá).
+  const dir = process.env.MUSE_GATEWAY_DIR ? path.resolve(process.env.MUSE_GATEWAY_DIR) : path.join(path.dirname(ROOT), `${path.basename(ROOT)}-muse-gateway`);
+  for (const old of [path.join(ROOT, "gateway-data"), path.join(ROOT, "data", "gateway")]) {
+    if (process.env.MUSE_GATEWAY_DIR || existsSync(dir) || !existsSync(old)) continue;
+    renameSync(old, dir); // bản trước để trong thư mục dự án → chuyển sang chỗ mới, giữ nguyên phiên đăng nhập
+    console.log(`▶ Đã chuyển dữ liệu Cổng Muse từ ${old} sang ${dir}`);
+  }
   const port = Number(process.env.MUSE_GATEWAY_PORT) || DEFAULT_PORT;
   try {
     const gw = await createGateway({ dir, port });

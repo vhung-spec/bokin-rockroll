@@ -247,6 +247,7 @@ export default function MusePage() {
                   showTitle
                   onResend={(s) => void resend(m.mv_id, s)}
                   onReimport={(s) => void post({ action: "reimport", id: m.mv_id, shots: s })}
+                  onRecheck={(s) => void post({ action: "recheck", id: m.mv_id, shots: s })}
                   onForget={() => void post({ action: "forget", id: m.mv_id })}
                 />
               </div>

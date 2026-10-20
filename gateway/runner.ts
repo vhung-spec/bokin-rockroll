@@ -5,7 +5,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { weeklyOut, type Attachment, type MuseDriver, type Quota } from "./musePage.ts";
-import { MAX_ATTACH, type GatewayTask, type TaskStore } from "./tasks.ts";
+import { InputError, MAX_ATTACH, type GatewayTask, type TaskStore } from "./tasks.ts";
 
 const RATIO_LABEL: Record<string, string> = { "9:16": "9:16 dọc", "16:9": "16:9 ngang", "1:1": "1:1 vuông", "4:3": "4:3 ngang", "3:4": "3:4 dọc" };
 const EXT: Record<string, string> = { "video/mp4": "mp4", "image/webp": "webp", "image/png": "png", "image/jpeg": "jpg" };
@@ -97,7 +97,7 @@ export async function runTask(task: GatewayTask, o: RunOptions): Promise<string[
   const saved: string[] = [];
   for (const [k, f] of wanted.entries()) {
     const buf = await page.readFile(f.path);
-    if (buf.length !== f.byteLen) throw new Error(`Tải file lỗi: ${buf.length}/${f.byteLen} byte`);
+    if (f.byteLen > 0 && buf.length !== f.byteLen) throw new Error(`Tải file lỗi: ${buf.length}/${f.byteLen} byte`);
     const file = path.join(outputDir, `${task.id}_${k + 1}.${EXT[f.mime] ?? f.mime.split("/")[1]}`);
     writeFileSync(file, buf);
     saved.push(file);
@@ -358,7 +358,12 @@ export class Worker {
   async check(): Promise<WorkerState> {
     if (!this.state.chromeClosed) {
       try {
-        this.state.loggedIn = (await this.o.page.login()).loggedIn;
+        // Trang vừa mở còn đang tải → login() báo chưa; thử vài lần trước khi kết luận.
+        for (let i = 0; i < 6; i++) {
+          this.state.loggedIn = (await this.o.page.login()).loggedIn;
+          if (this.state.loggedIn) break;
+          await this.o.sleep(3000);
+        }
         if (this.state.loggedIn) await this.refreshQuota();
       } catch (e) {
         this.state.paused = `Không mở được Muse: ${(e as Error).message}`;
@@ -373,6 +378,19 @@ export class Worker {
     if (!t || (t.status !== "queued" && t.status !== "processing")) return t;
     if (t.status === "processing" && t.sessionId) this.o.page.cancel(t.sessionId).catch(() => {});
     return this.o.store.update(id, { status: "cancelled", step: "", error: "Đã huỷ.", finishedAt: this.o.now() });
+  }
+
+  /**
+   * Kiểm tra lại task lỗi đã gửi lên Muse: đọc lại đúng phiên chat cũ và tải file nếu Muse đã làm xong — KHÔNG gửi lệnh mới,
+   * không tốn lượt. (Vd. Muse làm xong nhưng câu trả lời không theo dạng thường lệ.)
+   */
+  recheck(id: string): GatewayTask | undefined {
+    const t = this.o.store.get(id);
+    if (!t || t.status !== "failed") return t;
+    if (!t.sessionId) throw new InputError("Task này chưa được gửi lên Muse — không có gì để kiểm tra lại.");
+    const r = this.o.store.update(id, { status: "processing", step: "Kiểm tra lại kết quả", error: "", finishedAt: 0, pollErrors: 0 });
+    this.pump();
+    return r;
   }
 
   /** Chạy lại task lỗi / đã huỷ (gửi lại bằng chat mới = tốn thêm một lượt Muse). */

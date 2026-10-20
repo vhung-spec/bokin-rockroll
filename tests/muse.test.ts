@@ -356,9 +356,24 @@ describe("Cổng Muse (gửi tự động) → clip vào đúng cảnh", () => {
       expect(p.clips[String(s1.shot_no)].duration).toBeGreaterThan(2.9);
       expect(p.clips[String(m.shots[1].shot_no)]).toBeDefined();
 
-      // Bấm "gửi" lại (cảnh chưa có clip): hai cảnh đã xong không bị gửi lại.
+      // Muse làm xong nhưng cổng tưởng lỗi → "Kiểm tra lại" lấy được video, không gửi lại.
+      const s3 = m.shots[2];
+      await jobs.sendToMuse([m.id], { shots: [s3.shot_no] });
+      await waitFor(() => fake.sent.length === 3, 5000, "gửi cảnh 3");
+      fake.finish(3, false);
+      await waitFor(async () => gw.store.list("failed").length === 1, 5000, "cổng báo lỗi");
+      await tick();
+      expect((await jobs.readMuse()).mvs.find((x) => x.mv_id === m.id)!.shots.find((s) => s.shot_no === s3.shot_no)).toMatchObject({ status: "error" });
+      fake.sessions.get("sess_3")!.ok = true;
+      expect(await jobs.recheckMuse(m.id)).toBe(1);
+      await waitFor(async () => gw.store.list("succeeded").length === 3, 5000, "kiểm tra lại xong");
+      await tick();
+      expect((await jobs.readMuse()).mvs.find((x) => x.mv_id === m.id)!.shots.find((s) => s.shot_no === s3.shot_no)).toMatchObject({ status: "done" });
+      expect(fake.sent).toHaveLength(3);
+
+      // Bấm "gửi" lại (cảnh chưa có clip): các cảnh đã xong không bị gửi lại.
       const rest = await jobs.sendToMuse([m.id], { onlyMissing: true });
-      expect(rest.count).toBe(new Set(m.shots.slice(2).map((s) => muse.museText(s, { avoid: true }))).size);
+      expect(rest.count).toBe(new Set(m.shots.slice(3).map((s) => muse.museText(s, { avoid: true }))).size);
       expect(gw.store.list().filter((t) => t.prompt === muse.museText(s1, { avoid: true }))).toHaveLength(1);
     } finally {
       await gw.close();

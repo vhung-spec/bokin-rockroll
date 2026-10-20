@@ -45,6 +45,21 @@ describe("phần thuần", () => {
     expect(parseQuota(null)).toBeNull();
   });
 
+  it("không có thẻ video → lấy đường dẫn sandbox:// Muse ghi trong câu trả lời (gặp khi thử thật)", () => {
+    const p = "sandbox://workspace/imagine_media/media-generation-1955-pier-0-89fc.mp4";
+    const r = parseResult([
+      { text: "", images: [], videos: [], extra: [] },
+      { text: "Muốn mình làm thêm bản biến tấu khác…", images: [], videos: [], extra: [p, p, "sandbox://workspace/x/thumb.png"] },
+    ]);
+    expect(r.files).toEqual([
+      { path: p, mime: "video/mp4", byteLen: 0 },
+      { path: "sandbox://workspace/x/thumb.png", mime: "image/png", byteLen: 0 },
+    ]);
+    // Có thẻ video rồi thì không lặp lại cùng file.
+    const withCard = parseResult([{ text: "", images: [], videos: [{ path: p, mime: "video/mp4", byte_len: 9 }], extra: [p] }]);
+    expect(withCard.files).toEqual([{ path: p, mime: "video/mp4", byteLen: 9 }]);
+  });
+
   it("sau lỗi: lỗi mạng lúc dò thì dò lại phiên cũ (không gửi lại); lỗi Muse thì thất bại, không tự tốn thêm lượt", () => {
     const t = { attempts: 1, sessionId: "s1", pollErrors: 0 } as GatewayTask;
     expect(failurePatch(t, new Error("mất mạng"), 9)).toMatchObject({ pollErrors: 1 });
@@ -108,6 +123,28 @@ describe("Cổng Muse (HTTP) với Muse giả", () => {
       await waitFor(() => fake.sent.length === 2, 5000, "gửi lại");
       fake.finish(2);
       await waitFor(async () => (await taskOf(gw, id)).status === "succeeded", 5000, "xong");
+    } finally {
+      await gw.close();
+    }
+  });
+
+  it("Kiểm tra lại task lỗi: đọc lại phiên cũ, tải video nếu Muse đã làm — không gửi lại; chưa gửi thì báo lỗi", async () => {
+    const fake = new FakeMuse();
+    const gw = await createGateway({ dir: newDir(), port: 0, page: fake, worker: FAST });
+    try {
+      const id = (await call(gw, "POST", "/tasks", { prompt: "p" })).data.task.id as string;
+      await waitFor(() => fake.sent.length === 1, 5000, "gửi lệnh");
+      fake.finish(1, false); // lúc đầu không thấy video
+      await waitFor(async () => (await taskOf(gw, id)).status === "failed", 5000, "thất bại");
+      fake.sessions.get("sess_1")!.ok = true; // thật ra Muse đã làm xong video
+      expect((await call(gw, "POST", `/tasks/${id}/recheck`, {})).status).toBe(200);
+      await waitFor(async () => (await taskOf(gw, id)).status === "succeeded", 5000, "kiểm tra lại xong");
+      expect(fake.sent).toHaveLength(1); // không gửi lại
+
+      fake.loggedIn = false; // task mới không gửi được → vẫn đang chờ
+      const id2 = (await call(gw, "POST", "/tasks", { prompt: "q" })).data.task.id as string;
+      gw.store.update(id2, { status: "failed" });
+      expect((await call(gw, "POST", `/tasks/${id2}/recheck`, {})).status).toBe(400);
     } finally {
       await gw.close();
     }
