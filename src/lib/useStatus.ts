@@ -22,6 +22,8 @@ export interface AppStatus {
   pendingDrafts: number;
   renderQueue: number;
   renderQueueRunning: boolean;
+  /** Số cảnh đang tạo clip bằng Muse (chờ dán / đang làm / lỗi). */
+  museOpen: number;
 }
 
 export const MODE_LABEL: Record<AppStatus["mode"], string> = {

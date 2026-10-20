@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import ApiKeyCard from "@/components/settings/ApiKeyCard";
 import EngineCard from "@/components/settings/EngineCard";
 import PricingCard from "@/components/settings/PricingCard";
+import { HaoHaoStatus } from "@/components/muse/MusePanels";
 import { Card, ErrorBox, Field, Spinner } from "@/components/ui";
 import { api } from "@/lib/client";
+import type { MuseView } from "@/lib/museJobs";
 import type { Character, Pricing, Settings, StyleLibrary, VideoModelLibrary } from "@/lib/types";
 
 type Couples = Record<string, { characters: Character[]; created_at: string }>;
@@ -24,6 +26,7 @@ export default function SettingsPage() {
   const [couples, setCouples] = useState<Couples>({});
   const [pricing, setPricing] = useState<Pricing | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
+  const [muse, setMuse] = useState<MuseView | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +38,7 @@ export default function SettingsPage() {
     api<Couples>("/api/couples").then(setCouples).catch(() => {});
     api<Pricing>("/api/library/pricing").then(setPricing).catch(() => {});
     api<Status>("/api/status").then(setStatus).catch(() => {});
+    api<MuseView>("/api/muse").then(setMuse).catch(() => {});
   }, []);
 
   if (!s)
@@ -60,6 +64,7 @@ export default function SettingsPage() {
       setSaved("Đã lưu cài đặt.");
       setTimeout(() => setSaved(null), 2500);
       api<Status>("/api/status").then(setStatus).catch(() => {});
+      api<MuseView>("/api/muse").then(setMuse).catch(() => {});
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -179,6 +184,33 @@ export default function SettingsPage() {
               {profile.name}: tối đa {profile.max_prompt_chars} ký tự/prompt · {profile.supports_audio ? "có mô tả âm thanh (Audio:)" : "không có âm thanh"} ·{" "}
               {profile.prompt_style}
             </p>
+          )}
+        </Card>
+
+        <Card title="Muse (qua HaoHao)" className="lg:col-span-2">
+          <p className="mb-3 text-xs text-muted">
+            Muse (Meta) làm clip qua tool HaoHao. App chỉ <b>đọc</b> hàng đợi của HaoHao (tasks.json) để biết clip nào xong rồi đưa vào đúng cảnh — không sửa gì
+            bên HaoHao. Nên chọn công cụ video “Meta Muse (qua HaoHao)” ở trên để prompt viết đúng kiểu Muse.
+          </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Thư mục dữ liệu HaoHao" hint={`Thư mục có file tasks.json. Để trống = tự tìm (${muse?.defaultDir ?? "…"}).`}>
+              <input className="input" value={s.museDataDir} placeholder={muse?.defaultDir} onChange={(e) => set("museDataDir", e.target.value)} />
+            </Field>
+            <div className="pt-5">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={s.museAutoRender} onChange={(e) => set("museAutoRender", e.target.checked)} />
+                MV đủ clip + có bài hát → tự thêm vào hàng chờ dựng và chạy
+              </label>
+              <label className="mt-2 flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={s.museAvoid} onChange={(e) => set("museAvoid", e.target.checked)} />
+                Ghép negative prompt vào cuối prompt gửi Muse (“Avoid: …”) — Muse không có ô negative riêng
+              </label>
+            </div>
+          </div>
+          {muse && (
+            <div className="mt-3">
+              <HaoHaoStatus view={muse} />
+            </div>
           )}
         </Card>
 

@@ -29,6 +29,8 @@ export const UPLOAD_DIR = () => dataPath("uploads");
 export const MEDIA_DIR = () => dataPath("media");
 /** Hàng chờ dựng video. */
 export const QUEUE_FILE = () => dataPath("render_queue.json");
+/** Các cảnh đang tạo clip bằng Muse (qua HaoHao). */
+export const MUSE_FILE = () => dataPath("muse.json");
 
 export const LIBRARY_FILES = {
   themes: "themes.json",
@@ -57,6 +59,9 @@ export const DEFAULT_SETTINGS: Settings = {
   channelVoice: "Imagine turning the dial of an old tabletop radio…",
   engine: "auto",
   songStructure: DEFAULT_SONG_STRUCTURE,
+  museDataDir: "",
+  museAutoRender: true,
+  museAvoid: true,
 };
 
 // ---------- Khoá theo tên (tránh ghi đè đồng thời trong cùng tiến trình) ----------

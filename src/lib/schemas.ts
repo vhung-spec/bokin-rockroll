@@ -39,6 +39,9 @@ export const zSettings = z.object({
   songStructure: z
     .array(z.object({ name: z.string().min(1), ratio: z.number().min(0), role_vi: z.string(), role_en: z.string() }))
     .min(1),
+  museDataDir: z.string().trim().max(500),
+  museAutoRender: z.boolean(),
+  museAvoid: z.boolean(),
 }).refine((s) => s.minShots <= s.maxShots, { message: "Số cảnh tối thiểu phải ≤ số cảnh tối đa", path: ["minShots"] });
 
 export const zEditOptions = z.object({

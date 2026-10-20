@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/batch", label: "Chạy batch" },
   { href: "/manual", label: "claude.ai" },
   { href: "/history", label: "Lịch sử" },
+  { href: "/muse", label: "Clip Muse" },
   { href: "/render-queue", label: "Hàng chờ dựng" },
   { href: "/library", label: "Thư viện" },
   { href: "/settings", label: "Cài đặt" },
@@ -34,7 +35,14 @@ export default function Nav() {
         <nav className="flex flex-wrap gap-1">
           {LINKS.map((l) => {
             const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
-            const count = l.href === "/manual" ? (status?.pendingDrafts ?? 0) : l.href === "/render-queue" ? (status?.renderQueue ?? 0) : 0;
+            const count =
+              l.href === "/manual"
+                ? (status?.pendingDrafts ?? 0)
+                : l.href === "/render-queue"
+                  ? (status?.renderQueue ?? 0)
+                  : l.href === "/muse"
+                    ? (status?.museOpen ?? 0)
+                    : 0;
             if (l.href === "/manual" && status && status.mode !== "manual" && !count) return null;
             return (
               <Link

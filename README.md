@@ -12,6 +12,8 @@ Chạy được **hàng loạt** (ví dụ 50 bài một lần) và xuất **XLS
 
 Khi công cụ tạo video trả clip về, app **ghép clip với nhạc thành MV hoàn chỉnh (MP4)**: ghép nguyên từng clip theo thứ tự cảnh và lặp lại cho tới hết bài (xem mục 2b).
 
+Dùng **Muse (Meta) qua tool HaoHao** thì app lo luôn phần clip: copy sẵn prompt cho bạn dán vào HaoHao một lần, clip nào xong tự vào đúng cảnh, đủ clip thì tự dựng (xem mục 2c).
+
 ---
 
 ## 1. Bắt đầu nhanh (không cần biết code)
@@ -163,6 +165,48 @@ Mỗi dòng: `id | world_location | theme | outline | [tên bài] | [thời lư�
 
 Upload **CSV/XLSX**: dòng đầu là tiêu đề cột như trên (sheet đầu tiên của file XLSX được đọc).
 
+## 2c. Tạo clip bằng Muse (qua tool HaoHao)
+
+**Muse** là trợ lý AI của Meta (muse.ai) — nó làm được video từ prompt. Tool **HaoHao** (Muse Studio Pro) mở Chrome, gửi prompt cho Muse rồi tải video về.
+Bản HaoHao bán cho khách **không có API**, nên app nối với HaoHao như sau:
+
+- **Gửi đi — bạn dán một lần**: app copy sẵn prompt của các cảnh; bạn dán vào HaoHao một lần cho cả MV (hoặc cả lô nhiều MV).
+- **Nhận về — tự động hoàn toàn**: app **chỉ đọc** hàng đợi của HaoHao (file `tasks.json`), nhận ra video nào là của cảnh nào (so đúng nội dung prompt),
+  rồi tự đưa clip vào đúng cảnh của đúng MV. App không sửa gì bên HaoHao.
+
+### Chuẩn bị (một lần)
+
+1. Cài **HaoHao**, mở lên, **đăng nhập Muse** trong cửa sổ Chrome mà HaoHao mở (bạn tự đăng nhập; app không cần và không lưu mật khẩu hay cookie).
+2. Trong **Cài đặt của HaoHao** đổi **Thư mục lưu** sang ổ còn nhiều chỗ (vd. `D:\HaoHao Output`) — mặc định là `Videos\MuseStudioPro` trên ổ C.
+3. Trong **Cài đặt của app** (thẻ **Muse (qua HaoHao)**):
+   - Thư mục dữ liệu HaoHao: để trống là app tự tìm (Windows: `%APPDATA%\HaoHao`, macOS: `~/Library/Application Support/HaoHao`). Thẻ này báo
+     “✓ Đã thấy HaoHao” khi đúng.
+   - **Đủ clip + có bài hát → tự thêm vào hàng chờ dựng và chạy** (bật sẵn; tắt nếu muốn tự bấm dựng).
+   - **Ghép negative prompt vào cuối prompt (“Avoid: …”)** (bật sẵn) — Muse không có ô negative prompt riêng.
+4. Ở thẻ **Công cụ video & storyboard** chọn **Meta Muse (qua HaoHao)** để Claude viết prompt đúng kiểu Muse (clip 10 giây, một đoạn văn liền,
+   không mô tả âm thanh vì MV dùng nhạc của bài). Giới hạn ký tự trong hồ sơ này là ước tính — chỉnh ở trang **Thư viện** sau khi thử thật.
+
+### Tạo clip
+
+1. Một MV: trang **🎬 Ghép video với nhạc** → thẻ **Tạo clip bằng Muse** → **🎬 Tạo N cảnh chưa có clip**.
+   Nhiều MV: menu **Clip Muse** → chọn MV → **🎬 Tạo clip bằng Muse**.
+2. App copy sẵn các prompt (mỗi prompt cách nhau một dòng trống). Mở **HaoHao → tab Studio** → chọn **Video** và tỉ lệ **16:9** → **dán** → bấm tạo.
+   Mỗi prompt là **một lượt Muse** (tính vào hạn mức tuần của tài khoản Meta).
+3. Xong. Mỗi cảnh hiện một ô theo tiến độ: **Chờ dán vào HaoHao** → **HaoHao đã nhận** → **Muse đang làm** → **✓ Đã vào MV**. Ô đỏ = lỗi, rê chuột để xem lý do.
+4. MV đủ clip cho mọi cảnh và đã có bài hát → app tự thêm vào **Hàng chờ dựng** và dựng (nếu bật). Chưa có bài hát thì tải bài lên lúc nào cũng được.
+
+Chi tiết:
+
+- **Cảnh lỗi**: bấm **Thử lại** ngay trong HaoHao (app tự theo), hoặc **↻ Gửi lại N cảnh lỗi** trong app rồi dán lại (tốn thêm lượt).
+- **Bấm Tạo hai lần** không gửi lại cảnh đang làm. Lỡ mất chữ đã copy: **📋 Copy lại N prompt chờ dán**. Hai cảnh trùng hệt prompt chỉ dán một lần.
+- **Không tốn lượt thừa**: cảnh chưa có clip mà HaoHao **đã có sẵn video cùng prompt** (vd. bạn xoá nhầm clip) → app nhận luôn video đó, không cần dán lại.
+- **Clip bạn tự thêm** vào một cảnh sau khi gửi thì được giữ nguyên, app không đè bằng clip Muse.
+- **Tắt app giữa chừng** không sao: HaoHao vẫn làm tiếp; mở lại app là nhận tiếp (tiến độ lưu ở `data/muse.json`).
+- Video gốc vẫn nằm trong thư mục lưu của HaoHao; app chép một bản vào `data/media/<mã MV>/`.
+- Nếu HaoHao để tỉ lệ khác 16:9, cảnh đó có ghi chú nhắc; MV vẫn dựng được (cắt cho đầy khung hoặc viền đen tuỳ thiết lập).
+- Sau này có **bản HaoHao có API**: chỉ cần thêm một “nguồn task” mới trong `src/lib/museJobs.ts` (`sourceFor`) — phần nhận clip / tự dựng giữ nguyên,
+  và bước dán tay sẽ không còn.
+
 ## 3. Logic sinh MV
 
 1. **Character Bible** — Claude tạo cặp đôi HE/SHE (hoặc dùng **cặp đôi cố định cho cả series** nếu bật trong Cài đặt).
@@ -192,13 +236,13 @@ Sửa trên giao diện (trang **Thư viện**) hoặc sửa trực tiếp file 
 | `era_rules.json` | Quy tắc theo từng năm 1950–1959, vật dụng theo năm ra đời (hula hoop 1958, Thunderbird 1955…), đồ hiện đại bị cấm, thương hiệu/người thật. |
 | `style_presets.json` | Kodachrome 35mm (mặc định), Technicolor musical, Black & white noir, Faded home-movie 8mm. |
 | `pricing.json` | Giá Claude API (USD / 1 triệu token) theo model và tỷ giá đ/USD — dùng để quy đổi chi phí. |
-| `video_models.json` | Veo, Kling, Hailuo, Sora, Runway: giới hạn ký tự, độ dài clip, có âm thanh hay không, cách viết prompt. |
+| `video_models.json` | Veo, Kling, Hailuo, Sora, Runway, Meta Muse (qua HaoHao): giới hạn ký tự, độ dài clip, có âm thanh hay không, cách viết prompt. |
 | `settings.json` | Cài đặt (model, công cụ video, độ dài clip, số cảnh tối thiểu–tối đa, lặp cảnh, cặp đôi cố định, số luồng song song…). |
 | `couples.json` | Cặp đôi cố định đã lưu cho từng series. |
 
 Dữ liệu sinh ra khi chạy (không commit): `data/history/` (lịch sử MV, mỗi MV một file JSON), `data/drafts/` (MV đang chờ câu trả lời từ claude.ai), `data/uploads/` (ảnh tham chiếu nhân vật)
 và `data/media/` (nhạc, clip và video đã dựng của từng MV — xoá MV trong Lịch sử thì thư mục này của MV cũng bị xoá;
-`data/media/_shared/` là thiết lập dựng chung, logo và font), `data/render_queue.json` (hàng chờ dựng).
+`data/media/_shared/` là thiết lập dựng chung, logo và font), `data/render_queue.json` (hàng chờ dựng), `data/muse.json` (các cảnh đang tạo clip bằng Muse).
 
 ## 5. Cài đặt đáng chú ý
 
@@ -222,7 +266,7 @@ và `data/media/` (nhạc, clip và video đã dựng của từng MV — xoá M
 ```bash
 npm test          # unit test (cấu trúc bài hát, parser, era check, ghép prompt, pipeline, chế độ claude.ai, chi phí, gọi Claude giả lập,
                   #   nhận nhịp, kế hoạch cắt cảnh, cân bằng âm lượng / preset YouTube / logo / intro, hàng chờ dựng,
-                  #   dựng MP4 thật bằng ffmpeg từ clip + nhạc tự tạo)
+                  #   dựng MP4 thật bằng ffmpeg từ clip + nhạc tự tạo, tạo clip bằng Muse với một "HaoHao giả" — không tốn lượt Muse)
 npm run typecheck
 ```
 
@@ -253,11 +297,14 @@ src/lib/
   media.ts              lưu nhạc / clip của từng MV (data/media/)
   ffmpeg.ts, render.ts  gọi ffmpeg, dựng MP4 chạy nền (tiến độ, huỷ, kiểm tra đầu ra)
   queue.ts              hàng chờ dựng: dựng lần lượt nhiều MV với thiết lập chung (data/media/_shared)
+  muse.ts               tạo clip bằng Muse — phần thuần: chữ gửi Muse, khớp task HaoHao với cảnh, trạng thái từng cảnh
+  haohao.ts             đọc (chỉ đọc) hàng đợi tasks.json và thư mục lưu của tool HaoHao
+  museJobs.ts           theo dõi các cảnh (data/muse.json), dò HaoHao chạy nền, đưa clip vào đúng cảnh, tự thêm vào hàng chờ dựng
   loudness.ts           cân bằng âm lượng (chuyển từ loop_music/loudness.py của Bokin Studio Music)
   quality.ts            preset YouTube (chuyển từ loop_music/quality.py)
   branding.ts, fonts.ts logo kênh, intro tiêu đề, thông tin MP4 (chuyển từ loop_music/branding.py, mp4meta.py)
-src/app/                các trang: Nhập ý tưởng, Chạy batch, claude.ai (/manual), Kết quả (/mv/[id]), Ghép video (/mv/[id]/video), Hàng chờ dựng (/render-queue),
-                        Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
+src/app/                các trang: Nhập ý tưởng, Chạy batch, claude.ai (/manual), Kết quả (/mv/[id]), Ghép video (/mv/[id]/video), Clip Muse (/muse),
+                        Hàng chờ dựng (/render-queue), Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
 scripts/start.mjs       khởi động một lệnh (dùng bởi Chay-MV-Prompt-Studio.bat / .command)
 tests/                  vitest
 ```

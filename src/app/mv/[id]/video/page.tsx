@@ -8,6 +8,7 @@ import ClipStrip from "@/components/video/ClipStrip";
 import EditOptionsCard from "@/components/video/EditOptionsCard";
 import ExportStyleCard from "@/components/video/ExportStyleCard";
 import Timeline from "@/components/video/Timeline";
+import { MuseCard } from "@/components/muse/MusePanels";
 import { Card, ErrorBox, Spinner } from "@/components/ui";
 import { api, exportUrl, filesFromDrop, formatBytes, formatClock, mediaUrl, uploadFile } from "@/lib/client";
 import { mvTags } from "@/lib/branding";
@@ -79,6 +80,13 @@ export default function VideoPage() {
     api<MVResult>(`/api/mv/${id}`).then(setMv).catch((e) => setError(e.message));
     api<MediaState>(base).then((s) => apply(s)).catch((e) => setError(e.message));
   }, [id, base, apply]);
+
+  // Muse vừa đưa clip mới vào MV → tải lại danh sách clip (giữ nguyên tuỳ chọn đang sửa).
+  const reloadClips = useCallback(() => {
+    api<MediaState>(base)
+      .then((s) => apply(s, false))
+      .catch((e) => setError(e.message));
+  }, [base, apply]);
 
   // Lưu tuỳ chọn (trễ một chút để không gửi liên tục khi đang gõ).
   useEffect(() => {
@@ -355,6 +363,8 @@ export default function VideoPage() {
           </div>
         )}
       </Card>
+
+      <MuseCard mvId={mv.id} missing={missingShots} onClips={reloadClips} />
 
       {/* 2. Clip */}
       <Card

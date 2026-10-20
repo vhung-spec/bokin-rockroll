@@ -132,6 +132,12 @@ export interface Settings {
   channelVoice: string;
   engine: Engine;
   songStructure: SongSection[];
+  /** Thư mục dữ liệu của tool HaoHao (chứa tasks.json); "" = tự tìm. */
+  museDataDir: string;
+  /** MV đủ clip Muse + có bài hát → tự thêm vào hàng chờ dựng và chạy. */
+  museAutoRender: boolean;
+  /** Ghép negative prompt vào cuối chữ gửi Muse ("Avoid: …") vì Muse không có ô negative riêng. */
+  museAvoid: boolean;
 }
 
 export interface Libraries {

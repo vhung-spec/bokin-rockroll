@@ -48,5 +48,15 @@
     "supports_audio": false,
     "supports_negative_prompt": false,
     "prompt_style": "One or two continuous descriptive sentences: camera move, subject and action, setting and light. Positive phrasing only (no 'no ...' clauses)."
+  },
+  "muse": {
+    "name": "Meta Muse (qua HaoHao)",
+    "max_prompt_chars": 2000,
+    "target_prompt_chars": 1000,
+    "default_clip_len": 10,
+    "clip_lengths": [8, 10],
+    "supports_audio": false,
+    "supports_negative_prompt": false,
+    "prompt_style": "One flowing paragraph describing a single continuous shot: who, one clear action, the period setting, the light, then the camera move. Plain descriptive sentences only: no lists, no headings, no requests or questions addressed to the assistant (the request line is added automatically). Positive phrasing; what to avoid is appended separately."
   }
 }
