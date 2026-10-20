@@ -9,6 +9,7 @@ const LINKS = [
   { href: "/batch", label: "Chạy batch" },
   { href: "/manual", label: "claude.ai" },
   { href: "/history", label: "Lịch sử" },
+  { href: "/pipeline", label: "Tự động" },
   { href: "/muse", label: "Clip Muse" },
   { href: "/render-queue", label: "Hàng chờ dựng" },
   { href: "/library", label: "Thư viện" },
@@ -42,7 +43,9 @@ export default function Nav() {
                   ? (status?.renderQueue ?? 0)
                   : l.href === "/muse"
                     ? (status?.museOpen ?? 0)
-                    : 0;
+                    : l.href === "/pipeline"
+                      ? (status?.pipelineOpen ?? 0)
+                      : 0;
             if (l.href === "/manual" && status && status.mode !== "manual" && !count) return null;
             return (
               <Link

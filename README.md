@@ -12,7 +12,7 @@ Chạy được **hàng loạt** (ví dụ 50 bài một lần) và xuất **XLS
 
 Khi công cụ tạo video trả clip về, app **ghép clip với nhạc thành MV hoàn chỉnh (MP4)**: ghép nguyên từng clip theo thứ tự cảnh và lặp lại cho tới hết bài (xem mục 2b).
 
-Dùng **Muse (Meta)** thì app lo luôn phần clip: **Cổng Muse** chạy trên máy tự gửi từng cảnh cho Muse, clip nào xong tự vào đúng cảnh, đủ clip thì tự dựng (xem mục 2c).
+Dùng **Muse (Meta)** thì app lo luôn phần clip: app tự gửi từng cảnh cho Muse, clip nào xong tự vào đúng cảnh, đủ clip thì tự dựng (mục 2c). Menu **Tự động** chạy trọn **ý tưởng → kịch bản → bài hát → clip → MP4** bằng một nút (mục 2d).
 
 ---
 
@@ -169,66 +169,63 @@ Upload **CSV/XLSX**: dòng đầu là tiêu đề cột như trên (sheet đầu
 
 **Muse** là trợ lý AI của Meta (muse.ai) — nó làm được video từ prompt. App có hai cách gửi cảnh cho Muse (chọn ở **Cài đặt → Tạo clip bằng Muse**):
 
-| | **Cổng Muse (tự động)** — mặc định | **HaoHao (dán tay)** |
+| | **Tự động (Muse trong app)** — mặc định | **HaoHao (dán tay)** — dự phòng |
 |---|---|---|
 | Gửi đi | App **tự gửi** từng cảnh (kèm ảnh tham chiếu nhân vật nếu có) | App copy prompt, bạn **dán một lần** vào tab Studio của HaoHao |
 | Nhận về | Tự động: clip xong tự vào đúng cảnh | Tự động: app **chỉ đọc** hàng đợi của HaoHao (`tasks.json`), so nội dung prompt để biết clip của cảnh nào |
-| Cần gì | Google Chrome, Node.js 22.18+ (file khởi động tự mở cổng) | Tool HaoHao đã cài và đăng nhập |
+| Cần gì | Google Chrome | Tool HaoHao đã cài và đăng nhập |
 
 Cả hai cách đều: tiến độ từng cảnh trên app, MV đủ clip + có bài hát thì **tự vào hàng chờ dựng** (tắt được), tắt app giữa chừng mở lại vẫn nhận tiếp
 (tiến độ lưu ở `data/muse.json`).
 
-### Cổng Muse là gì
+### Muse trong app làm việc thế nào
 
-Một chương trình nhỏ chạy riêng trên máy (`gateway/`, địa chỉ `http://127.0.0.1:18700`). Nó mở **Google Chrome với profile riêng** (thư mục
-`chrome-profile` trong thư mục dữ liệu cổng, vd. `D:\bokin-rockroll-muse-gateway`), gửi prompt vào Muse như người gõ (“Tạo video · tỷ lệ 16:9 ngang” + prompt), chờ Muse làm xong rồi tải video về thư mục `videos/` trong đó.
+App mở **Google Chrome với profile riêng**, gửi prompt vào Muse như người gõ (“Tạo video · tỷ lệ 16:9 ngang” + prompt), chờ Muse làm xong rồi tải video về.
+Phần này chạy ngay trong app (mã ở `src/lib/museEngine/`), không có server hay cổng mạng riêng; tắt app là Chrome của Muse cũng tắt.
 
-- **Bấm đúp `Chay-MV-Prompt-Studio`** là mở cả app lẫn cổng; đóng cửa sổ đen là tắt cả hai (Chrome của cổng cũng tự tắt). Chạy riêng cổng: `npm run gateway`.
 - **Làm lần lượt từng cảnh** trên một tài khoản Muse, nghỉ khoảng 15 giây giữa hai lần gửi (không gửi dồn). Một cảnh mất khoảng 1–2 phút.
   Thử thật 20/10/2026 (2 cảnh): Muse ra clip **10 giây, 1280×720, 24 hình/giây, H.264, có tiếng** (AAC mono — MV tắt tiếng clip), đúng nội dung prompt.
-- **Không tự gửi lại** khi Muse đã nhận lệnh: mất mạng lúc chờ thì cổng dò lại đúng phiên đó (không tốn thêm lượt). Muse không ra video → cảnh báo lỗi kèm
-  lời Muse trả lời; bấm **↻ Gửi lại** nếu muốn thử lại (tốn thêm lượt).
-- **Hết hạn mức tuần** của Muse → cổng tạm dừng, báo ngày đặt lại, tới ngày tự chạy tiếp.
-- **Không có API key**: cổng chỉ nghe trên máy này (`127.0.0.1`), chỉ nhận yêu cầu gửi tới đúng `127.0.0.1:18700` / `localhost:18700`, và **từ chối mọi yêu cầu
-  đến từ trang web** (có `Origin` / `Sec-Fetch-Site`) hay POST không phải JSON — trang web lạ mở trong trình duyệt không gọi được cổng.
-- Dữ liệu cổng (có phiên đăng nhập Muse) nằm **ngoài thư mục app** (thư mục kế bên, cùng ổ đĩa; đổi được bằng biến `MUSE_GATEWAY_DIR`): lúc build Next.js đọc file trong thư mục app và sẽ vấp vào profile Chrome đang mở. Không bao giờ được commit.
-- Lưu ý: cổng điều khiển trang web Muse giống người dùng; Meta đổi trang thì có thể phải sửa cổng. Tự động hoá có thể trái điều khoản của Meta — cổng chỉ dùng
-  **một tài khoản**, không proxy, không xoay vòng tài khoản.
-
-API của cổng (cho app khác trên máy): `GET /status` · `POST /login` · `POST /check` · `GET /tasks` · `POST /tasks {prompt, ratio?, kind?, label?, images?: [data URL]}` ·
-`GET /tasks/:id` · `POST /tasks/:id/cancel | /retry | /recheck` · `GET /tasks/:id/file?i=0` · `GET /tasks/:id/history` (chẩn đoán) — xem đầu file `gateway/server.ts`.
-Hạn mức tuần: cổng đọc % hạn mức từ trang Muse; lần thử thật chưa đọc được (thẻ không hiện %), nên khi hết hạn mức cảnh sẽ báo lỗi thay vì tự tạm dừng.
+- **Không tự gửi lại** khi Muse đã nhận lệnh: mất mạng lúc chờ thì app dò lại đúng phiên đó (không tốn thêm lượt). Muse không ra video → cảnh báo lỗi kèm
+  lời Muse trả lời.
+- **Hết hạn mức**: Muse không còn cho xem % hạn mức tuần (trang Muse đã đổi). Khi Muse **báo hết hạn mức** (lúc từ chối lệnh hoặc trong câu trả lời), app
+  tạm dừng gửi, trả cảnh về hàng chờ (không tính lượt) — bấm **Kiểm tra** để chạy tiếp, hoặc app tự thử lại sau 6 giờ.
+- **Dữ liệu** (profile Chrome có phiên đăng nhập Muse, hàng đợi, video tải về) nằm **ngoài thư mục app**, ngay bên cạnh, cùng ổ đĩa — vd.
+  `D:\bokin-rockroll-muse-gateway` (đổi bằng biến `MUSE_ENGINE_DIR`). Lúc build, Next.js đọc file trong thư mục app và sẽ vấp vào profile Chrome đang mở.
+  Không bao giờ được commit.
+- **Xem thử không tốn lượt**: chạy app với biến `MUSE_FAKE=1` → “Muse giả” (video sọc màu 10 giây, không mở Chrome).
+- Lưu ý: app điều khiển trang web Muse giống người dùng; Meta đổi trang thì có thể phải sửa (`src/lib/museEngine/page.ts`). Tự động hoá có thể trái điều
+  khoản của Meta — app chỉ dùng **một tài khoản**, không proxy, không xoay vòng tài khoản.
 
 ### Chuẩn bị (một lần)
 
 1. Cài **Google Chrome** (nếu chưa có). Mở app bằng **`Chay-MV-Prompt-Studio`**.
-2. Vào **Cài đặt → Tạo clip bằng Muse**: chọn **Cổng Muse (tự động)** (mặc định). Thẻ báo “✓ Cổng Muse đang chạy”.
-3. Bấm **Đăng nhập Muse** → cửa sổ Chrome của cổng hiện ra → **bạn tự đăng nhập** Muse (tài khoản Meta). Đăng nhập xong cửa sổ tự cất đi; thẻ báo
-   “Đã đăng nhập Muse” và % hạn mức tuần đã dùng. App không bao giờ thấy hay lưu mật khẩu; phiên đăng nhập nằm trong profile Chrome của cổng.
+2. Vào **Cài đặt → Tạo clip bằng Muse**: chọn **Tự động (Muse trong app)** (mặc định).
+3. Bấm **Đăng nhập Muse** → cửa sổ Chrome của Muse hiện ra → **bạn tự đăng nhập** Muse (tài khoản Meta). Đăng nhập xong cửa sổ tự cất đi; thẻ báo
+   “Đã đăng nhập Muse”. App không bao giờ thấy hay lưu mật khẩu; phiên đăng nhập nằm trong profile Chrome của Muse.
 4. Ở thẻ **Công cụ video & storyboard** chọn **Meta Muse** để Claude viết prompt đúng kiểu Muse (clip 10 giây, một đoạn văn liền, không mô tả âm thanh vì MV
-   dùng nhạc của bài). Giới hạn ký tự trong hồ sơ này là ước tính — chỉnh ở trang **Thư viện** sau khi thử thật.
-5. Tuỳ chọn: **Đủ clip + có bài hát → tự thêm vào hàng chờ dựng và chạy** (bật sẵn), **Ghép negative prompt vào cuối prompt (“Avoid: …”)** (bật sẵn — Muse không
-   có ô negative prompt riêng).
+   dùng nhạc của bài). Giới hạn ký tự trong hồ sơ này là ước tính — chỉnh ở trang **Thư viện** nếu cần.
+5. Tuỳ chọn: **Thư mục nhạc** (để tự ghép bài hát — mục 2d), **Đủ clip + có bài hát → tự thêm vào hàng chờ dựng và chạy** (bật sẵn), **Ghép negative prompt
+   vào cuối prompt (“Avoid: …”)** (bật sẵn — Muse không có ô negative prompt riêng).
 
 ### Tạo clip
 
 1. Một MV: trang **🎬 Ghép video với nhạc** → thẻ **Tạo clip bằng Muse** → **🎬 Gửi N cảnh chưa có clip sang Muse**.
-   Nhiều MV: menu **Clip Muse** → chọn MV → **🎬 Gửi sang Muse**. App hỏi lại trước khi gửi vì **mỗi cảnh là một lượt Muse** (tính vào hạn mức tuần).
+   Nhiều MV: menu **Clip Muse** → chọn MV → **🎬 Gửi sang Muse**. (Chạy hết cả quy trình thì dùng menu **Tự động** — mục 2d.)
+   App hỏi lại trước khi gửi vì **mỗi cảnh là một lượt Muse** (tính vào hạn mức tuần).
 2. Xong. Mỗi cảnh hiện một ô theo tiến độ: **Đang chờ tới lượt** → **Muse đang làm** → **✓ Đã vào MV**. Ô đỏ = lỗi, rê chuột để xem lý do.
-3. MV đủ clip cho mọi cảnh và đã có bài hát → app tự thêm vào **Hàng chờ dựng** và dựng (nếu bật). Chưa có bài hát thì tải bài lên lúc nào cũng được.
+3. MV đủ clip cho mọi cảnh và đã có bài hát → app tự thêm vào **Hàng chờ dựng** và dựng (nếu bật).
 
 Chi tiết:
 
 - **Bấm gửi hai lần** không gửi lại cảnh đang làm. Hai cảnh trùng hệt prompt chỉ gửi một lần (dùng chung clip).
 - **Không tốn lượt thừa**: cảnh chưa có clip mà **đã có sẵn video cùng prompt** (vd. bạn xoá nhầm clip) → app nhận luôn video đó, không gửi lại.
 - **Clip bạn tự thêm** vào một cảnh sau khi gửi thì được giữ nguyên, app không đè bằng clip Muse.
-- **Muse làm xong mà đưa clip vào MV bị lỗi**: bấm **↻ Nhận lại N clip (không tốn lượt)** — app chỉ lấy lại file, không gửi lại cho Muse.
-  Lỗi “file đang bận” thoáng qua trên Windows thì app tự thử lại.
+- **Muse làm xong mà đưa clip vào MV bị lỗi**: bấm **↻ Nhận lại N clip (không tốn lượt)** — app chỉ lấy lại file. Lỗi “file đang bận” thoáng qua trên Windows
+  thì app tự thử lại.
 - **Cảnh báo lỗi mà có thể Muse đã làm xong** (vd. Muse trả lời “Muốn mình làm thêm bản biến tấu khác…”): bấm **↻ Kiểm tra lại N cảnh (không tốn lượt)** —
-  cổng đọc lại đúng cuộc chat cũ và tải video nếu có, không gửi lại. Cổng cũng tự tìm video Muse ghi trong câu trả lời khi không có “thẻ video” riêng
-  (gặp khi thử thật). Chỉ khi kiểm tra lại vẫn lỗi mới cần **↻ Gửi lại** (tốn thêm lượt).
-- Đổi cách gửi giữa chừng: cảnh gửi bằng cách cũ được giữ nguyên kèm lời nhắc; cảnh còn chờ dán vào HaoHao thì gửi lại qua Cổng Muse được.
-- Video gốc vẫn nằm trong thư mục `videos/` của cổng (hoặc thư mục lưu của HaoHao); app chép một bản vào `data/media/<mã MV>/`.
+  app đọc lại đúng cuộc chat cũ và tải video nếu có. App cũng tự tìm video Muse ghi trong câu trả lời khi không có “thẻ video” riêng (gặp khi thử thật).
+  Chỉ khi kiểm tra lại vẫn lỗi mới cần **↻ Gửi lại** (tốn thêm lượt).
+- Video gốc vẫn nằm trong thư mục `videos/` của Muse (hoặc thư mục lưu của HaoHao); app chép một bản vào `data/media/<mã MV>/`.
 
 ### Cách dán tay vào HaoHao (dự phòng)
 
@@ -236,7 +233,25 @@ Chọn **HaoHao (dán tay)** trong Cài đặt. Đăng nhập Muse trong HaoHao,
 `Videos\MuseStudioPro` trên ổ C). Thư mục dữ liệu HaoHao để trống là app tự tìm (Windows: `%APPDATA%\HaoHao`, macOS: `~/Library/Application Support/HaoHao`).
 Bấm **🎬 Tạo N cảnh chưa có clip** → app copy sẵn các prompt (cách nhau một dòng trống) → mở **HaoHao → tab Studio** → chọn **Video**, tỉ lệ **16:9** → **dán** → tạo.
 Cảnh lỗi: bấm **Thử lại** ngay trong HaoHao (app tự theo) hoặc **↻ Gửi lại** trong app rồi dán lại. Lỡ mất chữ đã copy: **📋 Copy lại N prompt chờ dán**.
-App không sửa gì bên HaoHao. HaoHao để tỉ lệ khác 16:9 thì cảnh có ghi chú nhắc; MV vẫn dựng được.
+App không sửa gì bên HaoHao. Đổi cách gửi giữa chừng: cảnh gửi bằng cách cũ được giữ nguyên kèm lời nhắc.
+
+## 2d. Tự động: ý tưởng → MP4 (một nút)
+
+Menu **Tự động**: mỗi việc là một MV chạy qua 4 bước, không cần bấm gì thêm:
+
+1. **Kịch bản** — Claude viết từ một dòng ý tưởng (cần **Claude API key**: Cài đặt → *API key của Claude*; chế độ **Demo** cũng chạy được để thử).
+   Ở chế độ claude.ai (copy – dán) thì viết kịch bản như mục 2 rồi chọn **Từ MV có sẵn**. Viết lần lượt từng MV.
+2. **Bài hát** — MV chưa có bài → app tìm file trùng **tên bài** trong **Thư mục nhạc** (Cài đặt), vd. `D:\Downloads\Nhạc kênh khúc nhạc thời gian`.
+   So tên không phân biệt dấu / hoa thường, bỏ phần phiên bản sau dấu “ - ” (Rock Version, Nam Metal Rock…), chữ “rock” và số dính ở cuối:
+   tên bài “Đèn Khuya” khớp “Đèn Khuya - Rock Version.wav”. Có hai bản cùng tên (vd. “- Nam Rock” và “- Rock Version”) thì ghi rõ phiên bản trong tên bài
+   (“Đèn Khuya - Rock Version”); không ghi thì app chọn bản đầu theo tên và ghi chú lại. Ý tưởng không ghi thời lượng → kịch bản lấy đúng độ dài bài.
+   Không thấy bài → việc chờ; thả file vào thư mục nhạc (hoặc tải lên ở trang Ghép video) là app tự chạy tiếp.
+3. **Clip Muse** — gửi các cảnh chưa có clip sang Muse trong app (mục 2c), clip xong tự vào đúng cảnh.
+4. **Dựng MP4** — đủ clip + có bài hát → thêm vào **Hàng chờ dựng** (thiết lập dựng chung), dựng xong có nút **⬇ Tải MP4**.
+
+Cách dùng: menu **Tự động** → tab **Từ ý tưởng** (dán bảng như trang Nhập ý tưởng → **Đọc bảng** → **▶ Chạy tự động N ý tưởng**) hoặc tab **Từ MV có sẵn**
+(chọn MV → **▶ Chạy tự động N MV**). App hỏi lại kèm chi phí ước tính (lượt Muse, tiền Claude API). Mỗi việc hiện 4 ô Kịch bản / Bài hát / Clip Muse / Dựng MP4;
+bước lỗi có **↻ Thử lại bước lỗi**; cảnh Muse lỗi thì vào **Clip Muse** để Kiểm tra lại / Gửi lại. Tiến độ lưu ở `data/pipeline.json`, tắt app mở lại chạy tiếp.
 
 ## 3. Logic sinh MV
 
@@ -329,7 +344,10 @@ src/lib/
   ffmpeg.ts, render.ts  gọi ffmpeg, dựng MP4 chạy nền (tiến độ, huỷ, kiểm tra đầu ra)
   queue.ts              hàng chờ dựng: dựng lần lượt nhiều MV với thiết lập chung (data/media/_shared)
   muse.ts               tạo clip bằng Muse — phần thuần: chữ gửi Muse, khớp task với cảnh, trạng thái từng cảnh
-  museGateway.ts        gọi Cổng Muse (gửi cảnh, đăng nhập, xem task, tải file)
+  museEngine/           Muse trong app: chrome.ts (Chrome qua CDP pipe), page.ts (script trong trang muse.ai), runner.ts (gửi / dò / tải, Worker,
+                        nhận ra hết hạn mức), tasks.ts (hàng đợi), fake.ts (Muse giả — MUSE_FAKE=1), index.ts (một bản cho cả app)
+  songs.ts              tự ghép bài hát: so tên bài với tên file trong thư mục nhạc
+  pipeline.ts           dây chuyền tự động: kịch bản → bài hát → clip Muse → MP4 (data/pipeline.json); pipelineSteps.ts = kiểu + nhãn
   haohao.ts             đọc (chỉ đọc) hàng đợi tasks.json và thư mục lưu của tool HaoHao (cách dán tay)
   museJobs.ts           theo dõi các cảnh (data/muse.json), dò chạy nền, đưa clip vào đúng cảnh, tự thêm vào hàng chờ dựng
   loudness.ts           cân bằng âm lượng (chuyển từ loop_music/loudness.py của Bokin Studio Music)
@@ -337,12 +355,6 @@ src/lib/
   branding.ts, fonts.ts logo kênh, intro tiêu đề, thông tin MP4 (chuyển từ loop_music/branding.py, mp4meta.py)
 src/app/                các trang: Nhập ý tưởng, Chạy batch, claude.ai (/manual), Kết quả (/mv/[id]), Ghép video (/mv/[id]/video), Clip Muse (/muse),
                         Hàng chờ dựng (/render-queue), Lịch sử, Thư viện, Cài đặt; API trong src/app/api/
-gateway/                Cổng Muse — server riêng 127.0.0.1:18700 (Node chạy thẳng TypeScript, không cần build):
-  server.ts             HTTP + chặn yêu cầu từ trang web, chạy: node gateway/server.ts
-  runner.ts             gửi lệnh / dò / tải file, Worker chạy lần lượt trên một tài khoản (đăng nhập, hạn mức, không gửi lại khi lỗi mạng)
-  musePage.ts           script chạy trong trang muse.ai + lớp gọi nó qua Chrome
-  chrome.ts             mở Chrome với profile riêng, điều khiển qua CDP bằng pipe
-  tasks.ts              hàng đợi task (tasks.json trong thư mục dữ liệu cổng)
-scripts/start.mjs       khởi động một lệnh (dùng bởi Chay-MV-Prompt-Studio.bat / .command): mở Cổng Muse + app
-tests/                  vitest (fakeMuse.ts = "Muse giả" cho test cổng)
+scripts/start.mjs       khởi động một lệnh (dùng bởi Chay-MV-Prompt-Studio.bat / .command)
+tests/                  vitest (fakeMuse.ts = "Muse giả" điều khiển được, cho test)
 ```

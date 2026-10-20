@@ -205,7 +205,8 @@ export class Worker {
 
   private next(): GatewayTask | undefined {
     const tasks = this.o.store.list();
-    const oldest = (list: GatewayTask[]) => list.sort((a, b) => a.createdAt - b.createdAt)[0];
+    // Hàng đợi lưu task mới nhất ở đầu → đảo lại rồi xếp ổn định theo giờ tạo: task tạo cùng một mili-giây vẫn chạy đúng thứ tự gửi.
+    const oldest = (list: GatewayTask[]) => list.reverse().sort((a, b) => a.createdAt - b.createdAt)[0];
     return oldest(tasks.filter((t) => t.status === "processing" && t.sessionId)) ?? oldest(tasks.filter((t) => t.status === "queued"));
   }
 

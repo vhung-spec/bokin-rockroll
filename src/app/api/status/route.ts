@@ -3,6 +3,7 @@ import { generationMode } from "@/lib/generate";
 import { hasCredentials } from "@/lib/llm";
 import { museOpen } from "@/lib/muse";
 import { ensureMuseWatch, readMuse } from "@/lib/museJobs";
+import { ensurePipelineWatch, readPipeline } from "@/lib/pipeline";
 import { readQueue } from "@/lib/queue";
 import { listDrafts, readLibraries, readSettings } from "@/lib/store";
 
@@ -13,8 +14,11 @@ export async function GET() {
   const drafts = await listDrafts();
   const queue = await readQueue();
   const muse = await readMuse();
-  // Thanh menu gọi mỗi lần đổi trang: app vừa mở lại thì dò HaoHao tiếp cho các cảnh đang làm.
+  const pipeline = await readPipeline();
+  const pipelineOpen = pipeline.items.filter((i) => !i.done_at).length;
+  // Thanh menu gọi mỗi lần đổi trang: app vừa mở lại thì dò Muse / chạy dây chuyền tiếp cho các việc đang làm.
   if (muse.mvs.length) ensureMuseWatch(false);
+  if (pipelineOpen) ensurePipelineWatch(false);
   return NextResponse.json({
     mode: generationMode(settings),
     engine: settings.engine,
@@ -37,5 +41,7 @@ export async function GET() {
     renderQueueRunning: queue.running,
     /** Số cảnh đang tạo clip bằng Muse (chờ dán / đang làm / lỗi). */
     museOpen: museOpen(muse),
+    /** Số việc chưa xong trong dây chuyền tự động. */
+    pipelineOpen,
   });
 }
